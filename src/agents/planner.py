@@ -46,7 +46,7 @@ class PlannerAgent:
         model: Optional[str] = None,
     ):
         self.gateway = gateway or LLMGateway()
-        self.model = model or self.gateway.default_model
+        self.model = model or getattr(self.gateway, "default_model", "openai/gpt-oss-120b")
 
     def create_plan(
         self,
