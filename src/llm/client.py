@@ -17,6 +17,18 @@ T = TypeVar("T", bound=BaseModel)
 
 # Pricing per million tokens (Groq reference rates)
 MODEL_PRICING: Dict[str, Dict[str, float]] = {
+    "openai/gpt-oss-120b": {
+        "prompt": 0.50 / 1_000_000,
+        "completion": 0.75 / 1_000_000,
+    },
+    "openai/gpt-oss-20b": {
+        "prompt": 0.15 / 1_000_000,
+        "completion": 0.20 / 1_000_000,
+    },
+    "qwen/qwen3.8-27b": {
+        "prompt": 0.20 / 1_000_000,
+        "completion": 0.30 / 1_000_000,
+    },
     "llama-3.3-70b-versatile": {
         "prompt": 0.59 / 1_000_000,
         "completion": 0.79 / 1_000_000,
@@ -24,10 +36,6 @@ MODEL_PRICING: Dict[str, Dict[str, float]] = {
     "llama-3.1-8b-instant": {
         "prompt": 0.05 / 1_000_000,
         "completion": 0.08 / 1_000_000,
-    },
-    "mixtral-8x7b-32768": {
-        "prompt": 0.24 / 1_000_000,
-        "completion": 0.24 / 1_000_000,
     },
 }
 
@@ -60,7 +68,7 @@ class LLMGateway:
     def __init__(
         self,
         api_key: Optional[str] = None,
-        default_model: str = "llama-3.3-70b-versatile",
+        default_model: Optional[str] = None,
     ):
         self.api_key = api_key or os.getenv("GROQ_API_KEY")
         if not self.api_key:
@@ -68,7 +76,11 @@ class LLMGateway:
                 "GROQ_API_KEY is not set. Please create a .env file or pass api_key."
             )
         self.client = Groq(api_key=self.api_key)
-        self.default_model = default_model
+        self.default_model = (
+            default_model
+            or os.getenv("DEFAULT_MODEL")
+            or "openai/gpt-oss-120b"
+        )
 
     def _calculate_cost(self, model: str, prompt_tokens: int, completion_tokens: int) -> float:
         """Calculate estimated cost in USD based on model pricing."""
