@@ -178,16 +178,27 @@ class LLMGateway:
         start_time = time.perf_counter()
 
         for attempt in range(max_validation_retries + 1):
-            completion = self._call_with_retry(
-                model=selected_model,
-                messages=[
-                    {"role": "system", "content": augmented_system_prompt},
-                    {"role": "user", "content": current_user_prompt},
-                ],
-                temperature=temperature,
-                max_tokens=max_tokens,
-                response_format={"type": "json_object"},
-            )
+            try:
+                completion = self._call_with_retry(
+                    model=selected_model,
+                    messages=[
+                        {"role": "system", "content": augmented_system_prompt},
+                        {"role": "user", "content": current_user_prompt},
+                    ],
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    response_format={"type": "json_object"},
+                )
+            except groq.BadRequestError as bad_req:
+                if "Failed to generate JSON" in str(bad_req) and attempt < max_validation_retries:
+                    current_user_prompt = (
+                        f"{user_prompt}\n\n"
+                        "Your previous response caused a JSON generation syntax error. "
+                        "Ensure all keys and string values are properly formatted JSON with double quotes. "
+                        "Example: {\"step_id\": \"step_1\", \"title\": \"...\"}."
+                    )
+                    continue
+                raise bad_req
 
             usage = completion.usage
             if usage:

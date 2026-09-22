@@ -17,8 +17,10 @@ from src.models.schemas import (
     CriticDecision,
 )
 from src.agents.planner import PlannerAgent
+from src.agents.planner import PlannerAgent
 from src.agents.executor import ExecutorAgent
 from src.agents.critic import CriticAgent
+from src.agents.replanner import ReplannerAgent
 from src.llm.client import LLMGateway
 
 console = Console()
@@ -26,8 +28,8 @@ console = Console()
 
 class OrchestrationEngine:
     """
-    Central coordinator managing workflow execution and agent handoffs.
-    Enforces deterministic state transitions and dependency-ordered execution.
+    Central coordinator managing workflow execution, failure recovery, and agent handoffs.
+    Enforces deterministic state transitions, bounded retries, and dynamic re-planning.
     """
 
     def __init__(
@@ -35,13 +37,19 @@ class OrchestrationEngine:
         planner: Optional[PlannerAgent] = None,
         executor: Optional[ExecutorAgent] = None,
         critic: Optional[CriticAgent] = None,
+        replanner: Optional[ReplannerAgent] = None,
         gateway: Optional[LLMGateway] = None,
+        max_step_retries: int = 2,
+        max_workflow_replans: int = 2,
         verbose: bool = True,
     ):
         self.gateway = gateway or LLMGateway()
         self.planner = planner or PlannerAgent(gateway=self.gateway)
         self.executor = executor or ExecutorAgent(gateway=self.gateway)
         self.critic = critic or CriticAgent(gateway=self.gateway)
+        self.replanner = replanner or ReplannerAgent(gateway=self.gateway)
+        self.max_step_retries = max_step_retries
+        self.max_workflow_replans = max_workflow_replans
         self.verbose = verbose
 
     def _log(self, message: str, style: str = "cyan"):
@@ -130,8 +138,31 @@ class OrchestrationEngine:
             dep_context = self.executor.build_dependency_context(step, state)
             state = self.critic.evaluate_workflow_step(step.step_id, state, dependency_context=dep_context)
 
-            # Check verdict
+            # Check verdict and handle Bounded Retries
             latest_review = state.critic_reviews[step.step_id][-1]
+            while latest_review.decision == CriticDecision.REJECT:
+                current_retries = state.retry_counts.get(step.step_id, 0)
+                if current_retries < self.max_step_retries:
+                    state.retry_counts[step.step_id] = current_retries + 1
+                    state.status = WorkflowStatus.RETRYING
+                    step.status = StepStatus.RETRYING
+                    self._log(
+                        f"[Step: {step.step_id}] REJECTED by Critic (Attempt {current_retries + 1}/{self.max_step_retries}). "
+                        f"Retrying with targeted critique feedback...",
+                        "yellow",
+                    )
+                    fixes_str = "; ".join(latest_review.suggested_fixes) if latest_review.suggested_fixes else "Address critique."
+                    feedback = f"Critique: {latest_review.critique}\nFixes Needed: {fixes_str}"
+
+                    # Re-execute with feedback
+                    state = self.executor.execute_workflow_step(step.step_id, state, critic_feedback=feedback)
+                    # Re-audit
+                    state = self.critic.evaluate_workflow_step(step.step_id, state, dependency_context=dep_context)
+                    latest_review = state.critic_reviews[step.step_id][-1]
+                else:
+                    # Retries exhausted for this step
+                    break
+
             if latest_review.decision == CriticDecision.PASS:
                 completed_steps.add(step.step_id)
                 self._log(
@@ -141,14 +172,28 @@ class OrchestrationEngine:
                     "bold green",
                 )
             else:
-                self._log(
-                    f"[Step: {step.step_id}] Critic Verdict: REJECT - {latest_review.critique}",
-                    "bold red",
-                )
-                # In Module 6 (sequential baseline), a rejection marks step FAILED
-                step.status = StepStatus.FAILED
-                state.status = WorkflowStatus.FAILED
-                return state
+                # Step failed after retries. Check if we can dynamic re-plan
+                if len(state.replan_history) < self.max_workflow_replans:
+                    self._log(
+                        f"\n[WF: {state.workflow_id}] Step '{step.step_id}' failed after {self.max_step_retries} retries. "
+                        f"Triggering Dynamic Re-planning (Replan {len(state.replan_history) + 1}/{self.max_workflow_replans})...",
+                        "bold magenta",
+                    )
+                    state = self.replanner.replan_workflow(state, failed_step_id=step.step_id)
+                    total_steps = len(state.plan.steps)
+                    self._log(
+                        f"[WF: {state.workflow_id}] Plan dynamically restructured into {total_steps} steps. Resuming execution...",
+                        "bold green",
+                    )
+                    continue
+                else:
+                    self._log(
+                        f"\n[WF: {state.workflow_id}] Maximum retries and re-plans exhausted. Workflow FAILED.",
+                        "bold red",
+                    )
+                    step.status = StepStatus.FAILED
+                    state.status = WorkflowStatus.FAILED
+                    return state
 
         # 5. Workflow Completion
         state.status = WorkflowStatus.COMPLETED
