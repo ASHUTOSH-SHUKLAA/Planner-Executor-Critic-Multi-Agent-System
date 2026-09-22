@@ -8,7 +8,8 @@ import json
 import time
 from typing import Type, TypeVar, Optional, Generic, Dict, Any
 from pydantic import BaseModel, ValidationError
-from groq import Groq
+import groq
+from groq import Groq, RateLimitError
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -88,6 +89,21 @@ class LLMGateway:
         cost = (prompt_tokens * rates["prompt"]) + (completion_tokens * rates["completion"])
         return round(cost, 6)
 
+    def _call_with_retry(self, **kwargs):
+        """
+        Executes chat completion with automatic exponential backoff on HTTP 429 RateLimitError.
+        """
+        max_rate_retries = 6
+        base_delay = 2.0
+        for attempt in range(max_rate_retries):
+            try:
+                return self.client.chat.completions.create(**kwargs)
+            except RateLimitError as rle:
+                if attempt == max_rate_retries - 1:
+                    raise rle
+                delay = base_delay * (1.8 ** attempt)
+                time.sleep(delay)
+
     def generate_text(
         self,
         system_prompt: str,
@@ -100,7 +116,7 @@ class LLMGateway:
         selected_model = model or self.default_model
 
         start_time = time.perf_counter()
-        completion = self.client.chat.completions.create(
+        completion = self._call_with_retry(
             model=selected_model,
             messages=[
                 {"role": "system", "content": system_prompt},
@@ -162,7 +178,7 @@ class LLMGateway:
         start_time = time.perf_counter()
 
         for attempt in range(max_validation_retries + 1):
-            completion = self.client.chat.completions.create(
+            completion = self._call_with_retry(
                 model=selected_model,
                 messages=[
                     {"role": "system", "content": augmented_system_prompt},
