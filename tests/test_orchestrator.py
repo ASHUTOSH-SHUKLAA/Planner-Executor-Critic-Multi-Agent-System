@@ -87,10 +87,14 @@ def test_orchestration_state_transitions_mocked():
 
     mock_critic.evaluate_workflow_step.side_effect = mock_evaluate_step
 
+    mock_synthesizer = MagicMock()
+    mock_synthesizer.synthesize_workflow.side_effect = lambda s: setattr(s, "final_result", "Synthesized report") or s
+
     engine = OrchestrationEngine(
         planner=mock_planner,
         executor=mock_executor,
         critic=mock_critic,
+        synthesizer=mock_synthesizer,
         verbose=False,
     )
 

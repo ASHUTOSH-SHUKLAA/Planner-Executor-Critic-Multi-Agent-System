@@ -109,10 +109,14 @@ def test_parallel_execution_speedup_and_state_integrity():
 
     mock_critic.evaluate_output.side_effect = instant_pass
 
+    mock_synthesizer = MagicMock()
+    mock_synthesizer.synthesize_workflow.side_effect = lambda s: setattr(s, "final_result", "Done") or s
+
     engine = OrchestrationEngine(
         planner=mock_planner,
         executor=mock_executor,
         critic=mock_critic,
+        synthesizer=mock_synthesizer,
         verbose=False,
     )
 

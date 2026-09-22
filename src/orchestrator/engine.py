@@ -5,6 +5,7 @@ TASK_RECEIVED -> PLANNING -> PLAN_READY -> EXECUTING -> CRITIC_REVIEW -> COMPLET
 Maintains the shared scratchpad across all agent interactions.
 """
 
+import os
 import asyncio
 from typing import Optional, List, Set, Callable
 import time
@@ -21,6 +22,7 @@ from src.agents.planner import PlannerAgent
 from src.agents.executor import ExecutorAgent
 from src.agents.critic import CriticAgent
 from src.agents.replanner import ReplannerAgent
+from src.agents.synthesizer import SynthesizerAgent
 from src.llm.client import LLMGateway
 
 console = Console()
@@ -38,16 +40,21 @@ class OrchestrationEngine:
         executor: Optional[ExecutorAgent] = None,
         critic: Optional[CriticAgent] = None,
         replanner: Optional[ReplannerAgent] = None,
+        synthesizer: Optional[SynthesizerAgent] = None,
         gateway: Optional[LLMGateway] = None,
         max_step_retries: int = 2,
         max_workflow_replans: int = 2,
         verbose: bool = True,
     ):
         self.gateway = gateway or LLMGateway()
-        self.planner = planner or PlannerAgent(gateway=self.gateway)
-        self.executor = executor or ExecutorAgent(gateway=self.gateway)
-        self.critic = critic or CriticAgent(gateway=self.gateway)
-        self.replanner = replanner or ReplannerAgent(gateway=self.gateway)
+        fast_model = os.getenv("FAST_MODEL", "openai/gpt-oss-20b")
+        reasoning_model = os.getenv("DEFAULT_MODEL", "openai/gpt-oss-120b")
+
+        self.planner = planner or PlannerAgent(gateway=self.gateway, model=reasoning_model)
+        self.executor = executor or ExecutorAgent(gateway=self.gateway, model=fast_model)
+        self.critic = critic or CriticAgent(gateway=self.gateway, model=fast_model)
+        self.replanner = replanner or ReplannerAgent(gateway=self.gateway, model=reasoning_model)
+        self.synthesizer = synthesizer or SynthesizerAgent(gateway=self.gateway, model=reasoning_model)
         self.max_step_retries = max_step_retries
         self.max_workflow_replans = max_workflow_replans
         self.verbose = verbose
@@ -195,7 +202,17 @@ class OrchestrationEngine:
                     state.status = WorkflowStatus.FAILED
                     return state
 
-        # 5. Workflow Completion
+        # 5. Synthesis Phase
+        state.status = WorkflowStatus.SYNTHESIZING
+        self._log(f"\n[WF: {state.workflow_id}] Entering SYNTHESIS phase...", "bold magenta")
+        try:
+            state = self.synthesizer.synthesize_workflow(state)
+            self._log(f"[WF: {state.workflow_id}] Synthesis report produced successfully.", "green")
+        except Exception as e:
+            self._log(f"[WF: {state.workflow_id}] Synthesis notice: {e}. Falling back to combined steps.", "yellow")
+            state.final_result = "\n\n".join(f"## {s.title}\n{s.output}" for s in state.step_outputs.values())
+
+        # 6. Workflow Completion
         state.status = WorkflowStatus.COMPLETED
         self._log(
             f"\n[WF: {state.workflow_id}] Workflow completed successfully! Status: {state.status.value}",
@@ -424,7 +441,17 @@ class OrchestrationEngine:
                     state.status = WorkflowStatus.FAILED
                     return state
 
-        # 3. Workflow Completion
+        # 3. Synthesis Phase
+        state.status = WorkflowStatus.SYNTHESIZING
+        self._log(f"\n[WF: {state.workflow_id}] Entering SYNTHESIS phase...", "bold magenta")
+        try:
+            state = await asyncio.to_thread(self.synthesizer.synthesize_workflow, state)
+            self._log(f"[WF: {state.workflow_id}] Synthesis report produced successfully.", "green")
+        except Exception as e:
+            self._log(f"[WF: {state.workflow_id}] Synthesis notice: {e}. Falling back to combined steps.", "yellow")
+            state.final_result = "\n\n".join(f"## {s.title}\n{s.output}" for s in state.step_outputs.values())
+
+        # 4. Workflow Completion
         state.status = WorkflowStatus.COMPLETED
         self._log(
             f"\n[WF: {state.workflow_id}] Parallel workflow completed successfully! Status: {state.status.value}",
@@ -436,6 +463,15 @@ class OrchestrationEngine:
         )
 
         return state
+
+    async def run_workflow_async(self, task: str, mode: str = "parallel") -> WorkflowState:
+        """
+        Unified asynchronous entrypoint for running workflows in either 'parallel' or 'sequential' mode.
+        """
+        if mode == "parallel":
+            return await self.run_parallel_async(task)
+        else:
+            return await asyncio.to_thread(self.run, task)
 
     def run_parallel(self, task: str) -> WorkflowState:
         """

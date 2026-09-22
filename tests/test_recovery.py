@@ -87,11 +87,15 @@ def test_bounded_retry_recovers_successfully():
 
     mock_critic.evaluate_workflow_step.side_effect = mock_critic_evaluate
 
+    mock_synthesizer = MagicMock()
+    mock_synthesizer.synthesize_workflow.side_effect = lambda s: setattr(s, "final_result", "Recovered report") or s
+
     engine = OrchestrationEngine(
         planner=mock_planner,
         executor=mock_executor,
         critic=mock_critic,
         replanner=mock_replanner,
+        synthesizer=mock_synthesizer,
         max_step_retries=2,
         verbose=False,
     )
@@ -171,11 +175,15 @@ def test_repeated_failure_triggers_replanning():
 
     mock_replanner.replan_workflow.side_effect = mock_replan_workflow
 
+    mock_synthesizer = MagicMock()
+    mock_synthesizer.synthesize_workflow.side_effect = lambda s: setattr(s, "final_result", "Restructured report") or s
+
     engine = OrchestrationEngine(
         planner=mock_planner,
         executor=mock_executor,
         critic=mock_critic,
         replanner=mock_replanner,
+        synthesizer=mock_synthesizer,
         max_step_retries=1,      # Fail fast: 1 retry max
         max_workflow_replans=1,
         verbose=False,

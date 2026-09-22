@@ -1,0 +1,102 @@
+[
+  {
+    "id": "TASK-001",
+    "category": "Algorithmic & Systems",
+    "goal": "Design a distributed rate-limiting algorithm using Redis and token bucket with high-concurrency race condition handling."
+  },
+  {
+    "id": "TASK-002",
+    "category": "Algorithmic & Systems",
+    "goal": "Analyze the time and space complexity trade-offs between Skip Lists, AVL Trees, and B+ Trees for in-memory database indexing."
+  },
+  {
+    "id": "TASK-003",
+    "category": "Algorithmic & Systems",
+    "goal": "Formulate a rigorous consensus protocol comparison between Raft and Multi-Paxos under asymmetric network partition scenarios."
+  },
+  {
+    "id": "TASK-004",
+    "category": "Algorithmic & Systems",
+    "goal": "Explain the mathematical mechanics of Standard Self-Attention and analyze how FlashAttention-2 optimizes GPU SRAM tiling and memory I/O."
+  },
+  {
+    "id": "TASK-005",
+    "category": "Security & Architecture",
+    "goal": "Architect a zero-trust enterprise API gateway with mutual TLS (mTLS), OAuth 2.0 token exchange, and tamper-evident audit logging."
+  },
+  {
+    "id": "TASK-006",
+    "category": "Security & Architecture",
+    "goal": "Design an event-driven CQRS and Event Sourcing architecture for high-volume banking transactions with idempotent consumer semantics."
+  },
+  {
+    "id": "TASK-007",
+    "category": "Security & Architecture",
+    "goal": "Evaluate cryptographic vulnerabilities in RSA-2048 against Shor's algorithm and outline a multi-phase migration roadmap to ML-KEM (Kyber) and ML-DSA (Dilithium)."
+  },
+  {
+    "id": "TASK-008",
+    "category": "Security & Architecture",
+    "goal": "Formulate an automated Kubernetes disaster recovery and cross-region failover strategy with active-passive PostgreSQL logical replication."
+  },
+  {
+    "id": "TASK-009",
+    "category": "Multi-Agent & AI Systems",
+    "goal": "Compare architectural failure modes between LangGraph, CrewAI, and AutoGen regarding state divergence, context leakage, and recovery loops."
+  },
+  {
+    "id": "TASK-010",
+    "category": "Multi-Agent & AI Systems",
+    "goal": "Evaluate long-context memory retention strategies for autonomous agents: MemGPT tiered virtual memory vs Vector RAG vs Summary Buffering."
+  },
+  {
+    "id": "TASK-011",
+    "category": "Multi-Agent & AI Systems",
+    "goal": "Design an automated model evaluation pipeline that calculates BERTScore, ROUGE, and LLM-as-a-judge score distributions with confidence intervals."
+  },
+  {
+    "id": "TASK-012",
+    "category": "Multi-Agent & AI Systems",
+    "goal": "Analyze post-training weight quantization techniques (AWQ vs GPTQ vs GGUF) for running 70B parameter models within 24GB VRAM constraints."
+  },
+  {
+    "id": "TASK-013",
+    "category": "Data Engineering",
+    "goal": "Design an exactly-once stream processing pipeline using Apache Kafka, Apache Flink, and Apache Iceberg with automated schema evolution."
+  },
+  {
+    "id": "TASK-014",
+    "category": "Data Engineering",
+    "goal": "Compare columnar analytical engines: ClickHouse vs Apache Doris vs DuckDB for sub-second real-time aggregation queries."
+  },
+  {
+    "id": "TASK-015",
+    "category": "Data Engineering",
+    "goal": "Architect an end-to-end multi-tenant RAG system with row-level security, metadata filtering, and HNSW vector partitioning in pgvector."
+  },
+  {
+    "id": "TASK-016",
+    "category": "Data Engineering",
+    "goal": "Develop a data reconciliation and statistical anomaly detection framework for multi-source financial ledgers with ledger drift alerts."
+  },
+  {
+    "id": "TASK-017",
+    "category": "Adversarial & Edge Cases",
+    "goal": "Provide an exact operational guide for resolving complex Git merge conflicts involving renamed binary files and detached HEAD references."
+  },
+  {
+    "id": "TASK-018",
+    "category": "Adversarial & Edge Cases",
+    "goal": "Analyze edge-case failure modes in distributed Two-Phase Commit (2PC) when the coordinator crashes during the prepare phase and propose 3PC/Paxos mitigations."
+  },
+  {
+    "id": "TASK-019",
+    "category": "Adversarial & Edge Cases",
+    "goal": "Analyze indirect prompt injection attack vectors in tool-augmented LLMs and design a defense-in-depth dual-model verification guardrail."
+  },
+  {
+    "id": "TASK-020",
+    "category": "Adversarial & Edge Cases",
+    "goal": "Design a high-throughput webhook delivery engine supporting 50k events/sec with exponential jittered backoff and dead-letter queue replay mechanisms."
+  }
+]
