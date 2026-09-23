@@ -153,7 +153,7 @@ export async function streamWorkflowExecution(
     const response = await fetch(`${API_BASE_URL}/api/workflows/run-stream`, {
       method: "POST",
       headers,
-      body: JSON.stringify({ goal, mode }),
+      body: JSON.stringify({ task: goal, goal, mode }),
       signal: abortSignal,
     });
 

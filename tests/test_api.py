@@ -100,3 +100,18 @@ def test_workflows_list_endpoint():
     response = client.get("/api/workflows")
     assert response.status_code == 200
     assert isinstance(response.json(), list)
+
+
+def test_workflow_request_accepts_both_task_and_goal():
+    """Verify that both 'task' and 'goal' keys are valid and accepted by the schema."""
+    from src.api.routes.workflows import RunWorkflowRequest
+    
+    req1 = RunWorkflowRequest(task="Conduct automobile research", mode="parallel")
+    assert req1.task == "Conduct automobile research"
+
+    req2 = RunWorkflowRequest(goal="Find best EV vs diesel under 5 lakh", mode="parallel")
+    assert req2.task == "Find best EV vs diesel under 5 lakh"
+
+    req3 = RunWorkflowRequest(task="Task text", goal="Goal text", mode="sequential")
+    assert req3.task == "Task text"
+

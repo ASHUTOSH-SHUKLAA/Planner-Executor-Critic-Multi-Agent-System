@@ -7,7 +7,7 @@ import json
 import asyncio
 from typing import Optional, List, Dict, Any, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from sse_starlette.sse import EventSourceResponse
 
 from src.models.schemas import (
@@ -28,8 +28,17 @@ router = APIRouter(prefix="/api/workflows", tags=["Workflows"])
 
 
 class RunWorkflowRequest(BaseModel):
-    task: str = Field(min_length=3, max_length=2000, description="The user task to execute")
+    task: Optional[str] = Field(default=None, description="The user task to execute")
+    goal: Optional[str] = Field(default=None, description="Alternative alias for task")
     mode: Literal["parallel", "sequential"] = "parallel"
+
+    @model_validator(mode="after")
+    def resolve_task_prompt(self):
+        prompt = self.task or self.goal
+        if not prompt or len(prompt.strip()) < 3:
+            raise ValueError("Task or goal prompt must be at least 3 characters.")
+        self.task = prompt.strip()
+        return self
 
 
 class WorkflowSummaryResponse(BaseModel):
