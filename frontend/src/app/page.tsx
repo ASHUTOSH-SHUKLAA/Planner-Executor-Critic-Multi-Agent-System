@@ -96,7 +96,7 @@ export default function LandingPage() {
 
             {/* Subtitle */}
             <p className="mt-5 text-base sm:text-xl text-zinc-600 dark:text-zinc-400 max-w-3xl mx-auto leading-relaxed">
-              Eliminate hallucinations with the Planner-Executor-Critic system. Decomposes natural language into
+              Eliminate hallucinations with TriadFlow. Decomposes natural language into
               dependency-aware DAGs, runs parallel execution waves, and audits step deliverables with deterministic quality gates.
             </p>
 
@@ -202,7 +202,7 @@ export default function LandingPage() {
               Three Specialized Agents. One Flawless Result.
             </h3>
             <p className="mt-3.5 text-zinc-600 dark:text-zinc-400 text-sm sm:text-base">
-              Traditional multi-agent systems suffer from context pollution and unverified execution. AegisAgent separates
+              Traditional multi-agent systems suffer from context pollution and unverified execution. TriadFlow separates
               responsibilities into three discrete roles governed by rigid data contracts.
             </p>
           </div>
@@ -546,7 +546,7 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-zinc-500">
           <div className="flex items-center gap-2">
             <Bot className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
-            <span>AegisAgent Multi-Agent Orchestration Engine • 2026</span>
+            <span>TriadFlow Multi-Agent Orchestration Engine • 2026</span>
           </div>
           <div className="flex items-center gap-6">
             <Link

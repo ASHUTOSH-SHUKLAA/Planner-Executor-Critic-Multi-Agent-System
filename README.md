@@ -1,4 +1,4 @@
-# AegisAgent: Autonomous Multi-Agent Orchestration & Self-Correction Engine
+# TriadFlow: Autonomous Multi-Agent Orchestration & Self-Correction Engine
 
 A production-grade, observable, and scalable multi-agent orchestration architecture designed to solve complex, multi-step goals using specialized **Planner**, **Wave Executor**, **Critic**, **Dynamic Re-planner**, and **Synthesizer** agents.
 
@@ -179,7 +179,7 @@ Results, latency, token expenditures, and critic catch rates are automatically e
 
 ## 📊 Benchmark Highlights
 
-| Metric | Target | AegisAgent Result |
+| Metric | Target | TriadFlow Result |
 | :--- | :--- | :--- |
 | **Autonomous Success Rate** | $\ge 85.0\%$ | **100.0%** (Verified on Benchmark Suite) |
 | **Parallel Concurrency Speedup** | $\ge 1.5\times$ | **~2.1x** Wall-Clock Latency Reduction |

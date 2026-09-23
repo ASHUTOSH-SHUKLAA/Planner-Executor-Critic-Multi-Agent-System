@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AegisAgent | Autonomous Multi-Agent Orchestration Engine",
+  title: "TriadFlow | Autonomous Multi-Agent Orchestration Engine",
   description:
     "Decompose goals into DAGs, execute parallel waves, and guarantee quality with deterministic Critic auditing and dynamic self-healing re-planning.",
 };

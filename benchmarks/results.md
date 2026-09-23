@@ -1,4 +1,4 @@
-# AegisAgent Multi-Agent Orchestration Benchmark Results
+# TriadFlow Multi-Agent Orchestration Benchmark Results
 **Generated:** 2026-09-22 19:56:23 UTC
 **Execution Mode:** `PARALLEL`
 **Total Tasks Evaluated:** `1`

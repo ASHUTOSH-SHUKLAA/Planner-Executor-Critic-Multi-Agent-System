@@ -30,7 +30,7 @@ export function Navbar() {
             <div className="flex flex-col">
               <div className="flex items-center gap-1.5">
                 <span className="text-base font-bold tracking-tight text-zinc-900 dark:text-white">
-                  AegisAgent
+                  TriadFlow
                 </span>
                 <span className="rounded-full bg-indigo-500/10 border border-indigo-500/20 px-1.5 py-0.2 text-[10px] font-medium text-indigo-600 dark:text-indigo-400">
                   Triad Engine

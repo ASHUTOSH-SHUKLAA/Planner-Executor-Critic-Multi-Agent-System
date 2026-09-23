@@ -244,7 +244,7 @@ export default function DashboardPage() {
     if (!workflowState) return;
 
     const mdLines = [
-      `# AegisAgent Workflow Execution Report`,
+      `# TriadFlow Workflow Execution Report`,
       `**Objective:** ${workflowState.goal}`,
       `**Status:** ${workflowState.status}`,
       `**Engine Mode:** ${mode.toUpperCase()}`,

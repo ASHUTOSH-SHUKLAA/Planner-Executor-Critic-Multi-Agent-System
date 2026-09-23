@@ -50,7 +50,7 @@ export default function LoginPage() {
           <Bot className="h-6 w-6" />
         </div>
         <div className="text-xl font-bold tracking-tight text-zinc-900 dark:text-white">
-          AegisAgent
+          TriadFlow
         </div>
       </Link>
 

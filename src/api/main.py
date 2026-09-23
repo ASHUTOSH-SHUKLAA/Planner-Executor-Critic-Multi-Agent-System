@@ -22,8 +22,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Planner-Executor-Critic Multi-Agent Orchestration Platform",
-    description="Full-stack autonomous multi-agent system with dynamic re-planning, quality auditing, and concurrency.",
+    title="TriadFlow | Multi-Agent Orchestration Platform",
+    description="Enterprise-grade Planner-Executor-Critic autonomous multi-agent orchestration platform with dynamic re-planning, quality auditing, and concurrency.",
     version="1.0.0",
     lifespan=lifespan,
 )

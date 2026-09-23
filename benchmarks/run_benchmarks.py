@@ -156,7 +156,7 @@ def generate_markdown_report(
     avg_rel = sum(r["avg_relevance"] for r in results) / total_tasks
 
     md = []
-    md.append("# AegisAgent Multi-Agent Orchestration Benchmark Results\n")
+    md.append("# TriadFlow Multi-Agent Orchestration Benchmark Results\n")
     md.append(f"**Generated:** {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}\n")
     md.append(f"**Execution Mode:** `{mode.upper()}`\n")
     md.append(f"**Total Tasks Evaluated:** `{total_tasks}`\n\n")
@@ -202,7 +202,7 @@ def generate_markdown_report(
 
 
 async def main():
-    parser = argparse.ArgumentParser(description="AegisAgent 20-Task Benchmark Runner")
+    parser = argparse.ArgumentParser(description="TriadFlow 20-Task Benchmark Runner")
     parser.add_argument("--mode", choices=["parallel", "sequential"], default="parallel", help="Execution mode")
     parser.add_argument("--sample", type=int, default=None, help="Number of tasks to sample (default: all)")
     parser.add_argument("--tasks", type=str, default=None, help="Comma-separated task IDs to run")
@@ -227,7 +227,7 @@ async def main():
         selected_tasks = all_tasks
 
     print(f"==================================================================")
-    print(f"  AegisAgent Multi-Agent Benchmark Suite")
+    print(f"  TriadFlow Multi-Agent Benchmark Suite")
     print(f"  Tasks to evaluate: {len(selected_tasks)}")
     print(f"  Engine Mode:       {args.mode.upper()}")
     print(f"==================================================================")
