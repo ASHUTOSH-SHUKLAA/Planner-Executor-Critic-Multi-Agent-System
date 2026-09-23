@@ -54,6 +54,7 @@ export interface WorkflowStateData {
   step_outputs: Record<string, StepOutputData>;
   current_step_id?: string;
   replan_count: number;
+  final_result?: string;
   total_tokens?: number;
   total_cost?: number;
   telemetry?: {
