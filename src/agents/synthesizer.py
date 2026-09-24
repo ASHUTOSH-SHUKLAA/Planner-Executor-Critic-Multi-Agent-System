@@ -1,10 +1,10 @@
 """
 Synthesizer Agent: Final Delivery Coordinator.
-Combines all validated step deliverables into a coherent, publication-ready executive report.
-Eliminates redundancies, synthesizes cross-step insights, and produces a structured final document.
+Combines all validated step deliverables and verified research citations into a coherent,
+publication-ready executive report with comparison tables and verifiable source links.
 """
 
-from typing import Optional
+from typing import Optional, List
 from rich.console import Console
 
 from src.models.schemas import WorkflowState, WorkflowStatus
@@ -12,25 +12,27 @@ from src.llm.client import LLMGateway
 
 console = Console()
 
-SYNTHESIZER_SYSTEM_PROMPT = """You are an elite Technical Synthesizer and Principal Solutions Architect.
-Your role is to examine the deliverables from multiple autonomous agent steps and synthesize them into a single, cohesive, publication-quality final technical report.
+SYNTHESIZER_SYSTEM_PROMPT = """You are an elite Principal Research Analyst and Technical Synthesizer.
+Your role is to synthesize deliverables and verified external research into a definitive, publication-quality final report.
 
 ### SYNTHESIS RULES:
-1. **Executive Cohesion**: Do NOT simply concatenate the steps. Unify the narrative into a seamless, executive-level document.
-2. **Eliminate Redundancy**: If different steps discussed overlapping definitions or background, merge them concisely.
-3. **Preserve Technical Rigor**: Retain all critical algorithms, formulas, architectural trade-offs, and key numerical findings.
-4. **Structured Format**:
-   - **Executive Summary**: High-level problem overview and definitive conclusion.
-   - **Architectural / Technical Breakdown**: Core mechanics and comparative trade-offs.
-   - **Implementation & Operational Roadmap**: Concrete steps, algorithms, and code/configuration strategies.
-   - **Failure Modes & Guardrails**: Edge cases, rate-limiting, and error-handling strategies.
-5. **Tone**: Objective, authoritative, and clear. Output standard Markdown.
+1. **Directly Address the User's Goal**: Focus entirely on answering the user's question with actionable conclusions, exact figures, and clear analysis.
+2. **Do NOT Expose Internal Mechanics**: Do NOT say "The Executor executed step 1..." or "The Critic validated...". Write naturally: "Based on the research and market analysis, here is the comprehensive evaluation..."
+3. **Structured Format & Comparison Tables**:
+   - **Executive Summary**: Clear, definitive high-level takeaway and recommendation.
+   - **Detailed Comparative Analysis**: Use Markdown tables where appropriate (e.g., comparing models, prices, range/mileage, maintenance, features).
+   - **Key Trade-offs & Ownership Factors**: Practical considerations (e.g., charging infrastructure vs fuel costs, resale, maintenance).
+   - **Definitive Recommendation**: Who should choose Option A vs Option B.
+4. **Mandatory Citations & Sources Section**:
+   - At the end of the report, you MUST provide an explicit `## Sources & Citations` section.
+   - List every verified source provided to you with a direct clickable markdown link: `[Source Title - Domain](URL)`.
+5. **Tone**: Objective, authoritative, precise, and professional. Output standard Markdown.
 """
 
 
 class SynthesizerAgent:
     """
-    Agent responsible for transforming raw multi-step outputs into a cohesive final synthesis.
+    Agent responsible for transforming raw multi-step outputs and citations into a cohesive final report.
     """
 
     def __init__(
@@ -39,12 +41,12 @@ class SynthesizerAgent:
         model: Optional[str] = None,
     ):
         self.gateway = gateway or LLMGateway()
-        # High reasoning model for superior executive writing and architectural synthesis
-        self.model = model or getattr(self.gateway, "default_model", "openai/gpt-oss-120b")
+        # Capable reasoning model for executive writing and architectural synthesis
+        self.model = model or getattr(self.gateway, "default_model", "gemini-flash-lite-latest")
 
     def synthesize_workflow(self, state: WorkflowState) -> WorkflowState:
         """
-        Synthesizes all completed step outputs into a final deliverable report.
+        Synthesizes all completed step outputs and gathered citations into a final deliverable report.
         """
         if not state.step_outputs:
             console.print("[yellow]No step outputs available to synthesize.[/yellow]")
@@ -63,20 +65,34 @@ class SynthesizerAgent:
 
         all_steps_text = "\n---\n".join(step_blocks)
 
+        # Build citations block from aggregated state sources
+        sources_text = "No external web sources were recorded."
+        if state.sources:
+            sources_lines = []
+            for idx, src in enumerate(state.sources, start=1):
+                sources_lines.append(
+                    f"[{idx}] {src.title} | Domain: {src.domain} | URL: {src.url}\n"
+                    f"    Snippet: {src.snippet}"
+                )
+            sources_text = "\n\n".join(sources_lines)
+
         user_prompt = f"""### OVERALL OBJECTIVE:
 {state.task}
 
 ### STEP DELIVERABLES TO SYNTHESIZE:
 {all_steps_text}
 
-Please produce the final unified executive technical report in clean Markdown."""
+### VERIFIED EXTERNAL SOURCES GATHERED DURING RESEARCH:
+{sources_text}
+
+Please produce the final publication-ready report in clean Markdown, including comparison tables and the mandatory '## Sources & Citations' section."""
 
         response = self.gateway.generate_text(
             system_prompt=SYNTHESIZER_SYSTEM_PROMPT,
             user_prompt=user_prompt,
             model=self.model,
             temperature=0.3,
-            max_tokens=3000,
+            max_tokens=4000,
         )
 
         state.final_result = response.raw_content

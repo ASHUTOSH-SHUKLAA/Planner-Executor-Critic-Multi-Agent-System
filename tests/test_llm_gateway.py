@@ -9,9 +9,10 @@ from src.llm.client import LLMGateway, MODEL_PRICING
 def test_missing_api_key_raises_error(monkeypatch):
     """Verify that omitting the API key raises an instructive error."""
     monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     with pytest.raises(ValueError) as exc:
         LLMGateway(api_key=None)
-    assert "GROQ_API_KEY is not set" in str(exc.value)
+    assert "is not set" in str(exc.value)
 
 
 def test_cost_calculation_llama_70b():

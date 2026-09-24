@@ -1,222 +1,256 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
+import ReactMarkdown from "react-markdown";
 import { Navbar } from "@/components/navbar";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/lib/toast-context";
 import {
   WorkflowStateData,
   StepOutputData,
-  SSEEvent,
+  SourceCitation,
+  SSEMessageEvent,
   streamWorkflowExecution,
+  apiDownloadWorkflow,
 } from "@/lib/api";
 import { DAGCanvas } from "@/components/canvas/DAGCanvas";
 import { StepInspector } from "@/components/canvas/StepInspector";
 import { TelemetryBar } from "@/components/canvas/TelemetryBar";
 import { LiveConsole, LogEntry } from "@/components/canvas/LiveConsole";
-import { HistoryDrawer, HistoryRunItem } from "@/components/canvas/HistoryDrawer";
-import { SynthesisModal } from "@/components/canvas/SynthesisModal";
 import {
   Play,
   Square,
   Sparkles,
-  Zap,
   ArrowRight,
   Layers,
   ListOrdered,
   AlertCircle,
-  History,
   Download,
   FileText,
   FileCode,
+  Globe,
+  ShieldCheck,
+  Cpu,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  ExternalLink,
+  BookOpen,
+  Clock,
+  History,
 } from "lucide-react";
 
-const PRESET_GOALS = [
-  {
-    title: "Quantum vs RSA Analysis",
-    prompt:
-      "Analyze the cryptographic vulnerabilities introduced by quantum computing (Shor's algorithm) to standard RSA-2048 and outline post-quantum replacement strategies.",
-  },
-  {
-    title: "Microservices Auth Architecture",
-    prompt:
-      "Design a production-grade authentication and authorization architecture for a distributed microservices system using OAuth2, JWTs, and mTLS.",
-  },
-  {
-    title: "PyTorch vs JAX Benchmarking",
-    prompt:
-      "Compare PyTorch 2.0 with JAX for large-scale distributed training of transformer models in terms of compiler optimizations, throughput, and developer experience.",
-  },
-  {
-    title: "Agent Framework Teardown",
-    prompt:
-      "Perform a deep architectural teardown of LangGraph, CrewAI, and AutoGen, highlighting failure modes in hallucination recovery and context leakage.",
-  },
-];
-
-const HISTORY_STORAGE_KEY = "aegis_session_history";
-
 export default function DashboardPage() {
-  const { token, user } = useAuth();
+  const router = useRouter();
+  const { token, isAuthenticated, isLoading: authLoading } = useAuth();
   const { success, error, info } = useToast();
 
   const [goal, setGoal] = useState("");
   const [mode, setMode] = useState<"sequential" | "parallel">("parallel");
   const [isRunning, setIsRunning] = useState(false);
+  const [activeWorkflowId, setActiveWorkflowId] = useState<string | null>(null);
+
+  // Workflow State & Telemetry
   const [workflowState, setWorkflowState] = useState<WorkflowStateData | null>(null);
+  const [currentStage, setCurrentStage] = useState<
+    "IDLE" | "PLANNING" | "RESEARCHING" | "VALIDATING" | "SYNTHESIZING" | "COMPLETED" | "FAILED"
+  >("IDLE");
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
 
-  // Modals and Drawers
-  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-  const [isSynthesisOpen, setIsSynthesisOpen] = useState(false);
-  const [history, setHistory] = useState<HistoryRunItem[]>([]);
+  // Technical View Toggle
+  const [showTechnicalCanvas, setShowTechnicalCanvas] = useState(false);
+  const [downloadingFormat, setDownloadingFormat] = useState<string | null>(null);
 
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  // Load history from localStorage
+  // Strict Auth Guard
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(HISTORY_STORAGE_KEY);
-      if (saved) {
-        setHistory(JSON.parse(saved));
-      }
-    } catch (e) {
-      console.warn("Failed to load session history:", e);
+    if (!authLoading && !isAuthenticated) {
+      router.push("/login");
     }
-  }, []);
+  }, [isAuthenticated, authLoading, router]);
 
-  // Save history to localStorage
-  const saveToHistory = (completedState: WorkflowStateData) => {
-    const newItem: HistoryRunItem = {
-      id: `run_${Date.now()}`,
-      timestamp: new Date().toLocaleTimeString("en-US", { hour12: false }),
-      goal: completedState.goal,
-      mode,
-      state: completedState,
-    };
-
-    setHistory((prev) => {
-      const updated = [newItem, ...prev.slice(0, 19)]; // Keep last 20 runs
-      try {
-        localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(updated));
-      } catch (e) {
-        console.warn("Failed to persist history:", e);
-      }
-      return updated;
-    });
-  };
-
-  const handleClearHistory = () => {
-    setHistory([]);
-    localStorage.removeItem(HISTORY_STORAGE_KEY);
-    success("Execution history cleared", "History Reset");
-  };
-
-  const handleSelectHistoryRun = (item: HistoryRunItem) => {
-    setWorkflowState(item.state);
-    setGoal(item.goal);
-    setMode(item.mode);
-    setSelectedStepId(null);
-    info(`Loaded workflow run: "${item.goal.slice(0, 40)}..."`, "Run Restored");
-  };
-
-  // Keyboard shortcut listener (Ctrl+Enter to run, Esc to close drawers)
+  // Keyboard shortcut (Ctrl+Enter to submit)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
-        if (!isRunning && goal.trim()) {
+        if (!isRunning && goal.trim() && token) {
           e.preventDefault();
           handleRun();
         }
-      } else if (e.key === "Escape") {
-        setSelectedStepId(null);
-        setIsSynthesisOpen(false);
-        setIsHistoryOpen(false);
       }
     };
-
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [goal, isRunning, mode, token]);
 
+  const addLog = (agent: string, message: string, level: string = "info") => {
+    const timeStr = new Date().toLocaleTimeString("en-US", { hour12: false });
+    setLogs((prev) => [...prev, { timestamp: timeStr, agent, message, level }]);
+  };
+
   const handleRun = async () => {
     if (!goal.trim() || isRunning) return;
+    if (!token) {
+      error("Authentication required. Please sign in.", "Auth Required");
+      router.push("/login");
+      return;
+    }
 
     setIsRunning(true);
     setErrorBanner(null);
     setSelectedStepId(null);
     setLogs([]);
+    setCurrentStage("PLANNING");
 
-    // Initialize local placeholder state
     const initialState: WorkflowStateData = {
-      goal,
+      task: goal.trim(),
       status: "PLANNING",
       step_outputs: {},
-      replan_count: 0,
+      sources: [],
       total_tokens: 0,
-      total_cost: 0,
+      estimated_cost_usd: 0,
     };
     setWorkflowState(initialState);
 
-    info(`Launching multi-agent workflow in ${mode.toUpperCase()} mode...`, "Engine Active");
+    addLog("ORCHESTRATOR", `Initiating autonomous research workflow in ${mode.toUpperCase()} mode...`);
+    addLog("PLANNER", `Decomposing research objective into dependency DAG and search steps...`);
 
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
 
-    const addLog = (agent: string, message: string) => {
-      const timeStr = new Date().toLocaleTimeString("en-US", { hour12: false });
-      setLogs((prev) => [...prev, { timestamp: timeStr, agent, message }]);
-    };
-
-    addLog("ORCHESTRATOR", `Starting workflow in ${mode.toUpperCase()} mode...`);
-    addLog("PLANNER", `Decomposing goal into dependency DAG...`);
-
-    let latestState = initialState;
-
     await streamWorkflowExecution(
-      goal,
+      goal.trim(),
       mode,
       token,
-      (event: SSEEvent) => {
-        if (event.event === "state_update" && event.state) {
-          latestState = event.state;
-          setWorkflowState(event.state);
+      (msg: SSEMessageEvent) => {
+        const { event, data } = msg;
 
-          // Auto-select current step if user hasn't selected another
-          if (event.state.current_step_id) {
-            setSelectedStepId(event.state.current_step_id);
-          }
-        } else if (event.event === "log" && event.log) {
-          const timeStr = event.log.timestamp || new Date().toLocaleTimeString("en-US", { hour12: false });
-          setLogs((prev) => [
-            ...prev,
-            {
-              timestamp: timeStr,
-              agent: event.log!.agent,
-              message: event.log!.message,
-              level: event.log!.level,
+        if (event === "workflow_started") {
+          setActiveWorkflowId(data.workflow_id);
+          setWorkflowState((prev) => ({
+            ...(prev || initialState),
+            workflow_id: data.workflow_id,
+          }));
+          addLog("ORCHESTRATOR", `Workflow assigned ID: ${data.workflow_id}`);
+        } else if (event === "status_change") {
+          if (data.status === "PLANNING") setCurrentStage("PLANNING");
+          else if (data.status === "SYNTHESIZING") setCurrentStage("SYNTHESIZING");
+        } else if (event === "plan_generated") {
+          setCurrentStage("RESEARCHING");
+          setWorkflowState((prev) => ({
+            ...(prev || initialState),
+            plan: {
+              plan_id: data.plan_id,
+              rationale: data.rationale,
+              steps: data.steps,
             },
-          ]);
-        } else if (event.event === "error") {
-          setErrorBanner(event.error || "Execution encountered an error.");
-          error(event.error || "Workflow error encountered.", "Execution Alert");
-          addLog("ERROR", event.error || "Workflow error encountered.");
+          }));
+          addLog("PLANNER", `Plan generated with ${data.steps?.length || 0} discrete steps.`);
+        } else if (event === "wave_started") {
+          addLog("EXECUTOR", `Launching execution wave for steps: [${data.step_ids.join(", ")}]`);
+        } else if (event === "step_started") {
+          addLog(
+            "EXECUTOR",
+            `Running step '${data.title}'${data.requires_research ? " (with live web search)" : ""}`
+          );
+        } else if (event === "step_completed") {
+          setWorkflowState((prev) => {
+            if (!prev) return prev;
+            const updatedOutputs = { ...prev.step_outputs };
+            updatedOutputs[data.step_id] = {
+              step_id: data.step_id,
+              title: data.title,
+              output: data.output,
+              key_findings: data.key_findings,
+              sources: data.sources,
+              status: "PASSED",
+              latency: data.latency,
+            };
+
+            // Merge sources cleanly without duplicates
+            const existingUrls = new Set((prev.sources || []).map((s) => s.url));
+            const newSources = [...(prev.sources || [])];
+            (data.sources || []).forEach((src: SourceCitation) => {
+              if (!existingUrls.has(src.url)) {
+                newSources.push(src);
+                existingUrls.add(src.url);
+              }
+            });
+
+            return {
+              ...prev,
+              step_outputs: updatedOutputs,
+              sources: newSources,
+            };
+          });
+          addLog(
+            "EXECUTOR",
+            `Step '${data.title}' delivered output. Found ${data.sources?.length || 0} source citations.`
+          );
+        } else if (event === "critic_audit_started") {
+          setCurrentStage("VALIDATING");
+          addLog("CRITIC", `Auditing step '${data.step_id}' against evidence and quality thresholds...`);
+        } else if (event === "step_retry") {
+          addLog(
+            "CRITIC",
+            `Step '${data.step_id}' rejected (attempt ${data.attempt}). Critique: ${data.critique}`,
+            "warning"
+          );
+        } else if (event === "step_verdict") {
+          addLog(
+            "CRITIC",
+            `Audit completed for '${data.step_id}'. Decision: ${data.decision} (Scores: Corr=${(data.scores?.correctness * 100).toFixed(0)}%, Comp=${(data.scores?.completeness * 100).toFixed(0)}%)`
+          );
+        } else if (event === "synthesis_ready") {
+          setCurrentStage("SYNTHESIZING");
+          setWorkflowState((prev) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              final_result: data.final_result,
+              sources: data.sources || prev.sources,
+            };
+          });
+          addLog("SYNTHESIZER", "Synthesizer compiled final grounded report with real citations.");
+        } else if (event === "workflow_completed") {
+          setCurrentStage("COMPLETED");
+          setIsRunning(false);
+          setActiveWorkflowId(data.workflow_id);
+          setWorkflowState((prev) => ({
+            ...(prev || initialState),
+            workflow_id: data.workflow_id,
+            status: "COMPLETED",
+            final_result: data.final_result,
+            sources: data.sources || [],
+            total_tokens: data.total_tokens || 0,
+            estimated_cost_usd: data.estimated_cost_usd || 0,
+          }));
+          addLog("ORCHESTRATOR", "Workflow successfully completed and verified!");
+          success("Research workflow completed with verified sources!", "Research Complete");
+        } else if (event === "workflow_failed") {
+          setCurrentStage("FAILED");
+          setIsRunning(false);
+          setErrorBanner(data.error || "Workflow failed to complete.");
+          addLog("ORCHESTRATOR", `Workflow failed: ${data.error}`, "error");
+        } else if (event === "error") {
+          setErrorBanner(data.message || "An execution error occurred.");
+          addLog("ERROR", data.message || "An execution error occurred.", "error");
         }
       },
       (err: Error) => {
-        setErrorBanner(err.message);
-        error(err.message, "Execution Error");
-        addLog("ERROR", err.message);
         setIsRunning(false);
+        setCurrentStage("FAILED");
+        setErrorBanner(err.message);
+        addLog("ERROR", err.message, "error");
+        error(err.message, "Execution Error");
       },
       () => {
         setIsRunning(false);
-        addLog("ORCHESTRATOR", "Workflow execution completed.");
-        success("Multi-agent workflow successfully completed and audited!", "Mission Accomplished");
-        saveToHistory(latestState);
       },
       abortController.signal
     );
@@ -227,80 +261,35 @@ export default function DashboardPage() {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
       setIsRunning(false);
-      info("Workflow execution stopped by user.", "Halted");
-      setLogs((prev) => [
-        ...prev,
-        {
-          timestamp: new Date().toLocaleTimeString("en-US", { hour12: false }),
-          agent: "ORCHESTRATOR",
-          message: "Execution stopped by user.",
-        },
-      ]);
+      info("Workflow execution stopped.", "Halted");
+      addLog("ORCHESTRATOR", "Execution halted by user.");
     }
   };
 
-  // Export Workflow as Markdown
-  const handleExportMarkdown = () => {
-    if (!workflowState) return;
-
-    const mdLines = [
-      `# TriadFlow Workflow Execution Report`,
-      `**Objective:** ${workflowState.goal}`,
-      `**Status:** ${workflowState.status}`,
-      `**Engine Mode:** ${mode.toUpperCase()}`,
-      `**Total Tokens:** ${(workflowState.total_tokens || 0).toLocaleString()}`,
-      `**Estimated Cost:** $${(workflowState.total_cost || 0).toFixed(5)} USD\n`,
-      `---\n`,
-      `## Executive Synthesis`,
-      workflowState.final_result || "No synthesized report generated.",
-      `\n---\n`,
-      `## Step Deliverables Breakdown\n`,
-    ];
-
-    Object.values(workflowState.step_outputs).forEach((step) => {
-      mdLines.push(`### Step: ${step.title} (${step.step_id})`);
-      mdLines.push(`**Status:** ${step.status} | **Retries:** ${step.retry_count}`);
-      if (step.critic_review) {
-        mdLines.push(
-          `**Critic Scores:** Correctness: ${(step.critic_review.correctness * 100).toFixed(0)}% | Completeness: ${(step.critic_review.completeness * 100).toFixed(0)}% | Relevance: ${(step.critic_review.relevance * 100).toFixed(0)}%`
-        );
-        if (step.critic_review.feedback) {
-          mdLines.push(`*Critic Feedback:* ${step.critic_review.feedback}`);
-        }
-      }
-      mdLines.push(`\n**Prompt:**\n\`\`\`\n${step.prompt}\n\`\`\``);
-      mdLines.push(`\n**Output Deliverable:**\n${step.output}\n\n---\n`);
-    });
-
-    const blob = new Blob([mdLines.join("\n")], { type: "text/markdown;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `workflow_report_${Date.now()}.md`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    success("Complete workflow exported as Markdown (.md)", "Export Complete");
+  const handleDownloadReport = async (format: "md" | "txt") => {
+    if (!activeWorkflowId || !token) {
+      error("Workflow ID not available yet", "Download Failed");
+      return;
+    }
+    setDownloadingFormat(format);
+    try {
+      const { blob, filename } = await apiDownloadWorkflow(activeWorkflowId, format, token);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      success(`Report downloaded as ${format.toUpperCase()}`, "Download Complete");
+    } catch (err: any) {
+      error(err.message || "Failed to download report", "Download Error");
+    } finally {
+      setDownloadingFormat(null);
+    }
   };
 
-  // Export Workflow as JSON
-  const handleExportJSON = () => {
-    if (!workflowState) return;
-    const jsonStr = JSON.stringify(workflowState, null, 2);
-    const blob = new Blob([jsonStr], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `workflow_state_${Date.now()}.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    success("Raw telemetry and DAG state exported as JSON", "Export Complete");
-  };
-
-  // Extract steps array for DAG canvas
   const stepsList: StepOutputData[] = workflowState
     ? Object.values(workflowState.step_outputs)
     : [];
@@ -314,76 +303,60 @@ export default function DashboardPage() {
     <div className="min-h-screen flex flex-col bg-[var(--background)] text-[var(--foreground)] transition-colors duration-200">
       <Navbar />
 
-      <main className="flex-1 flex flex-col max-w-7xl w-full mx-auto p-4 sm:p-6 gap-5">
-        {/* Top Control Header Card */}
-        <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/95 dark:bg-zinc-950/80 p-5 shadow-lg dark:shadow-xl backdrop-blur-md transition-colors">
+      <main className="flex-1 flex flex-col max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 gap-6">
+        {/* Research Input & Configuration Card */}
+        <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/95 dark:bg-zinc-950/80 p-5 sm:p-6 shadow-xl dark:shadow-2xl backdrop-blur-md transition-colors">
           <div className="flex flex-col gap-4">
-            {/* Input textarea */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <label className="text-xs font-semibold text-zinc-800 dark:text-zinc-300 flex items-center gap-1.5">
-                  <Sparkles className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
-                  <span>Agent Objective / Prompt</span>
+                <label className="text-xs font-semibold text-zinc-900 dark:text-zinc-200 flex items-center gap-1.5">
+                  <Sparkles className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                  <span>Research Objective & Query</span>
                 </label>
                 <div className="flex items-center gap-3">
-                  <span className="text-[11px] text-zinc-500 hidden sm:inline">
-                    Press <kbd className="px-1 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-[10px] font-mono">Ctrl+Enter</kbd> to launch
+                  <span className="text-[11px] text-zinc-400 hidden sm:inline">
+                    Press <kbd className="px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-[10px] font-mono">Ctrl+Enter</kbd> to execute
                   </span>
-                  <button
-                    onClick={() => setIsHistoryOpen(true)}
+                  <Link
+                    href="/history"
                     className="flex items-center gap-1 text-[11px] text-zinc-600 dark:text-zinc-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
                   >
                     <History className="h-3.5 w-3.5" />
-                    <span>History ({history.length})</span>
-                  </button>
+                    <span>View History</span>
+                  </Link>
                 </div>
               </div>
+
               <textarea
                 rows={3}
                 value={goal}
                 onChange={(e) => setGoal(e.target.value)}
-                placeholder="Enter a complex objective (e.g. Conduct a comprehensive security audit of OAuth2 vs SAML, compare token flows, and draft mitigation strategies)..."
+                placeholder="e.g. Conduct a research in the automobile industry and list out the best car model under 10 lakh in EV vs Diesel."
                 className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-900/60 p-3.5 text-sm text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-colors font-sans"
               />
             </div>
 
-            {/* Quick Preset Chips */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-1">
-              <span className="text-[11px] font-mono text-zinc-400 dark:text-zinc-500 flex-shrink-0">
-                Presets:
-              </span>
-              {PRESET_GOALS.map((preset, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => setGoal(preset.prompt)}
-                  className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/40 px-2.5 py-1 text-xs text-zinc-700 dark:text-zinc-300 hover:border-indigo-500/40 hover:text-indigo-600 dark:hover:text-white transition-colors flex-shrink-0"
-                >
-                  {preset.title}
-                </button>
-              ))}
-            </div>
-
-            {/* Mode selection & Run Actions */}
+            {/* Execution Controls */}
             <div className="flex flex-wrap items-center justify-between gap-4 pt-3 border-t border-zinc-100 dark:border-zinc-800/80">
               <div className="flex items-center gap-3">
                 <span className="text-xs text-zinc-500 dark:text-zinc-400 font-medium">
-                  Execution Engine:
+                  Dispatch Mode:
                 </span>
                 <div className="inline-flex rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900/60 p-1">
                   <button
                     onClick={() => setMode("parallel")}
-                    className={`flex items-center gap-1.5 rounded-lg px-3 py-1 text-xs font-semibold transition-colors ${
+                    className={`flex items-center gap-1.5 rounded-lg px-3 py-1 text-xs font-semibold transition-colors cursor-pointer ${
                       mode === "parallel"
                         ? "bg-indigo-600 text-white shadow-xs"
                         : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-zinc-200"
                     }`}
                   >
                     <Layers className="h-3.5 w-3.5" />
-                    <span>Parallel Waves (~2.1x)</span>
+                    <span>Parallel Waves</span>
                   </button>
                   <button
                     onClick={() => setMode("sequential")}
-                    className={`flex items-center gap-1.5 rounded-lg px-3 py-1 text-xs font-semibold transition-colors ${
+                    className={`flex items-center gap-1.5 rounded-lg px-3 py-1 text-xs font-semibold transition-colors cursor-pointer ${
                       mode === "sequential"
                         ? "bg-indigo-600 text-white shadow-xs"
                         : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-zinc-200"
@@ -395,33 +368,12 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {/* Action Buttons: Run / Stop & Export */}
-              <div className="flex items-center gap-2.5">
-                {workflowState && (
-                  <div className="flex items-center gap-1.5 mr-2">
-                    <button
-                      onClick={handleExportMarkdown}
-                      title="Download complete workflow report as Markdown"
-                      className="flex items-center gap-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors shadow-xs"
-                    >
-                      <FileText className="h-3.5 w-3.5 text-indigo-500" />
-                      <span>.MD</span>
-                    </button>
-                    <button
-                      onClick={handleExportJSON}
-                      title="Export telemetry and DAG state as JSON"
-                      className="flex items-center gap-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors shadow-xs"
-                    >
-                      <FileCode className="h-3.5 w-3.5 text-sky-500" />
-                      <span>.JSON</span>
-                    </button>
-                  </div>
-                )}
-
+              {/* Action Buttons */}
+              <div className="flex items-center gap-3">
                 {isRunning ? (
                   <button
                     onClick={handleStop}
-                    className="flex items-center gap-2 rounded-xl bg-red-600 px-5 py-2.5 text-xs font-bold text-white shadow-lg shadow-red-500/20 hover:bg-red-500 transition-colors"
+                    className="flex items-center gap-2 rounded-xl bg-red-600 px-5 py-2.5 text-xs font-bold text-white shadow-lg shadow-red-500/20 hover:bg-red-500 transition-colors cursor-pointer"
                   >
                     <Square className="h-3.5 w-3.5 fill-white" />
                     <span>Stop Execution</span>
@@ -430,10 +382,10 @@ export default function DashboardPage() {
                   <button
                     onClick={handleRun}
                     disabled={!goal.trim()}
-                    className="flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-2.5 text-xs font-bold text-white shadow-lg shadow-indigo-500/25 hover:bg-indigo-500 transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:scale-[1.02]"
+                    className="flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-2.5 text-xs font-bold text-white shadow-lg shadow-indigo-500/25 hover:bg-indigo-500 transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:scale-[1.02] cursor-pointer"
                   >
                     <Play className="h-3.5 w-3.5 fill-white" />
-                    <span>Run Multi-Agent Triad</span>
+                    <span>Run Multi-Agent Research</span>
                   </button>
                 )}
               </div>
@@ -450,66 +402,315 @@ export default function DashboardPage() {
             </div>
             <button
               onClick={() => setErrorBanner(null)}
-              className="text-red-500 hover:text-red-700 text-xs font-bold"
+              className="text-red-500 hover:text-red-700 text-xs font-bold cursor-pointer"
             >
               ✕
             </button>
           </div>
         )}
 
-        {/* Main Canvas + Inspector Split View */}
-        <div className="flex-1 flex flex-col rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/80 overflow-hidden shadow-xl dark:shadow-2xl min-h-[560px] transition-colors">
-          {/* Telemetry Bar */}
-          <TelemetryBar
-            state={workflowState}
-            isRunning={isRunning}
-            mode={mode}
-            onViewSynthesis={
-              workflowState?.final_result ? () => setIsSynthesisOpen(true) : undefined
-            }
-          />
+        {/* 4-Stage Research Stepper */}
+        {(isRunning || currentStage !== "IDLE") && (
+          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/95 dark:bg-zinc-950/80 p-4 shadow-sm">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {/* Stage 1: Planning */}
+              <div
+                className={`p-3 rounded-xl border flex items-center gap-3 transition-colors ${
+                  currentStage === "PLANNING"
+                    ? "border-indigo-500 bg-indigo-50/60 dark:bg-indigo-950/30 ring-1 ring-indigo-500"
+                    : currentStage !== "IDLE"
+                    ? "border-emerald-500/40 bg-emerald-50/30 dark:bg-emerald-950/10 text-emerald-600 dark:text-emerald-400"
+                    : "border-zinc-200 dark:border-zinc-800 opacity-60"
+                }`}
+              >
+                <div className="h-8 w-8 rounded-lg bg-indigo-500/10 flex items-center justify-center font-bold text-xs text-indigo-600 dark:text-indigo-400">
+                  1
+                </div>
+                <div>
+                  <div className="text-xs font-semibold text-zinc-900 dark:text-white flex items-center gap-1.5">
+                    <span>1. DAG Planning</span>
+                    {currentStage === "PLANNING" && (
+                      <span className="h-2 w-2 rounded-full bg-indigo-500 animate-ping" />
+                    )}
+                  </div>
+                  <div className="text-[10px] text-zinc-500">Decomposing goal</div>
+                </div>
+              </div>
 
-          {/* Canvas & Inspector Body */}
-          <div className="flex-1 flex flex-col lg:flex-row relative overflow-hidden">
-            {/* React Flow Visual DAG Canvas */}
-            <div className="flex-1 h-full min-h-[420px] relative">
-              <DAGCanvas
-                steps={stepsList}
-                selectedStepId={selectedStepId}
-                onSelectStep={(id) => setSelectedStepId(id)}
-              />
-            </div>
+              {/* Stage 2: Researching */}
+              <div
+                className={`p-3 rounded-xl border flex items-center gap-3 transition-colors ${
+                  currentStage === "RESEARCHING"
+                    ? "border-sky-500 bg-sky-50/60 dark:bg-sky-950/30 ring-1 ring-sky-500"
+                    : ["VALIDATING", "SYNTHESIZING", "COMPLETED"].includes(currentStage)
+                    ? "border-emerald-500/40 bg-emerald-50/30 dark:bg-emerald-950/10 text-emerald-600 dark:text-emerald-400"
+                    : "border-zinc-200 dark:border-zinc-800 opacity-60"
+                }`}
+              >
+                <div className="h-8 w-8 rounded-lg bg-sky-500/10 flex items-center justify-center font-bold text-xs text-sky-600 dark:text-sky-400">
+                  2
+                </div>
+                <div>
+                  <div className="text-xs font-semibold text-zinc-900 dark:text-white flex items-center gap-1.5">
+                    <span>2. Web Search</span>
+                    {currentStage === "RESEARCHING" && (
+                      <span className="h-2 w-2 rounded-full bg-sky-500 animate-ping" />
+                    )}
+                  </div>
+                  <div className="text-[10px] text-zinc-500">Live evidence collection</div>
+                </div>
+              </div>
 
-            {/* Step Inspector Sidebar Drawer */}
-            <div className="w-full lg:w-96 h-full min-h-[300px] lg:min-h-0 border-t lg:border-t-0 lg:border-l border-zinc-200 dark:border-zinc-800 flex-shrink-0">
-              <StepInspector
-                step={selectedStep}
-                onClose={() => setSelectedStepId(null)}
-              />
+              {/* Stage 3: Validating */}
+              <div
+                className={`p-3 rounded-xl border flex items-center gap-3 transition-colors ${
+                  currentStage === "VALIDATING"
+                    ? "border-purple-500 bg-purple-50/60 dark:bg-purple-950/30 ring-1 ring-purple-500"
+                    : ["SYNTHESIZING", "COMPLETED"].includes(currentStage)
+                    ? "border-emerald-500/40 bg-emerald-50/30 dark:bg-emerald-950/10 text-emerald-600 dark:text-emerald-400"
+                    : "border-zinc-200 dark:border-zinc-800 opacity-60"
+                }`}
+              >
+                <div className="h-8 w-8 rounded-lg bg-purple-500/10 flex items-center justify-center font-bold text-xs text-purple-600 dark:text-purple-400">
+                  3
+                </div>
+                <div>
+                  <div className="text-xs font-semibold text-zinc-900 dark:text-white flex items-center gap-1.5">
+                    <span>3. Critic Audit</span>
+                    {currentStage === "VALIDATING" && (
+                      <span className="h-2 w-2 rounded-full bg-purple-500 animate-ping" />
+                    )}
+                  </div>
+                  <div className="text-[10px] text-zinc-500">Fact-checking & quality</div>
+                </div>
+              </div>
+
+              {/* Stage 4: Synthesizing */}
+              <div
+                className={`p-3 rounded-xl border flex items-center gap-3 transition-colors ${
+                  currentStage === "SYNTHESIZING"
+                    ? "border-emerald-500 bg-emerald-50/60 dark:bg-emerald-950/30 ring-1 ring-emerald-500"
+                    : currentStage === "COMPLETED"
+                    ? "border-emerald-500 bg-emerald-50/30 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400"
+                    : "border-zinc-200 dark:border-zinc-800 opacity-60"
+                }`}
+              >
+                <div className="h-8 w-8 rounded-lg bg-emerald-500/10 flex items-center justify-center font-bold text-xs text-emerald-600 dark:text-emerald-400">
+                  4
+                </div>
+                <div>
+                  <div className="text-xs font-semibold text-zinc-900 dark:text-white flex items-center gap-1.5">
+                    <span>4. Final Synthesis</span>
+                    {currentStage === "SYNTHESIZING" && (
+                      <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping" />
+                    )}
+                    {currentStage === "COMPLETED" && (
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                    )}
+                  </div>
+                  <div className="text-[10px] text-zinc-500">Deliverable & citations</div>
+                </div>
+              </div>
             </div>
           </div>
+        )}
 
-          {/* Live Console Drawer */}
-          <LiveConsole logs={logs} onClear={() => setLogs([])} />
+        {/* Primary Research Report View */}
+        {workflowState?.final_result && (
+          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/95 dark:bg-zinc-950/90 shadow-xl overflow-hidden">
+            {/* Report Header Bar */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-5 sm:px-6 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-900/40">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+                  <BookOpen className="h-5 w-5" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-zinc-900 dark:text-white">
+                    Verified Research Report
+                  </h2>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                    Grounded with {workflowState.sources?.length || 0} external sources • Tokens:{" "}
+                    {workflowState.total_tokens.toLocaleString()} • Cost: $
+                    {workflowState.estimated_cost_usd.toFixed(4)} USD
+                  </p>
+                </div>
+              </div>
+
+              {/* Download Buttons */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleDownloadReport("md")}
+                  disabled={downloadingFormat === "md"}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors shadow-xs cursor-pointer disabled:opacity-50"
+                >
+                  <FileText className="h-3.5 w-3.5 text-indigo-500" />
+                  <span>Download .MD</span>
+                </button>
+                <button
+                  onClick={() => handleDownloadReport("txt")}
+                  disabled={downloadingFormat === "txt"}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  <span>Download .TXT</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Markdown Report Body */}
+            <div className="p-6 sm:p-8 font-sans text-sm text-zinc-800 dark:text-zinc-200 leading-relaxed space-y-4">
+              <div className="prose dark:prose-invert max-w-none text-zinc-800 dark:text-zinc-200">
+                <ReactMarkdown
+                  components={{
+                    h1: ({ children }) => (
+                      <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-white mt-6 mb-3 border-b border-zinc-200 dark:border-zinc-800 pb-2">
+                        {children}
+                      </h1>
+                    ),
+                    h2: ({ children }) => (
+                      <h2 className="text-lg font-bold text-zinc-900 dark:text-white mt-5 mb-2">
+                        {children}
+                      </h2>
+                    ),
+                    h3: ({ children }) => (
+                      <h3 className="text-sm font-semibold text-zinc-900 dark:text-white mt-4 mb-1">
+                        {children}
+                      </h3>
+                    ),
+                    p: ({ children }) => <p className="mb-3 leading-relaxed">{children}</p>,
+                    ul: ({ children }) => <ul className="list-disc pl-5 mb-3 space-y-1">{children}</ul>,
+                    ol: ({ children }) => <ol className="list-decimal pl-5 mb-3 space-y-1">{children}</ol>,
+                    li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+                    table: ({ children }) => (
+                      <div className="overflow-x-auto my-4 rounded-xl border border-zinc-200 dark:border-zinc-800">
+                        <table className="w-full text-left text-xs text-zinc-700 dark:text-zinc-300 divide-y divide-zinc-200 dark:divide-zinc-800">
+                          {children}
+                        </table>
+                      </div>
+                    ),
+                    thead: ({ children }) => (
+                      <thead className="bg-zinc-100 dark:bg-zinc-900 font-semibold">{children}</thead>
+                    ),
+                    th: ({ children }) => <th className="p-3 font-semibold">{children}</th>,
+                    td: ({ children }) => <td className="p-3 border-t border-zinc-200 dark:border-zinc-800">{children}</td>,
+                    blockquote: ({ children }) => (
+                      <blockquote className="border-l-4 border-indigo-500 pl-4 py-1 italic bg-zinc-50 dark:bg-zinc-900/40 rounded-r-lg my-3">
+                        {children}
+                      </blockquote>
+                    ),
+                    a: ({ href, children }) => (
+                      <a
+                        href={href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-indigo-600 dark:text-indigo-400 hover:underline font-medium inline-flex items-center gap-0.5"
+                      >
+                        <span>{children}</span>
+                        <ExternalLink className="h-3 w-3 inline ml-0.5" />
+                      </a>
+                    ),
+                  }}
+                >
+                  {workflowState.final_result}
+                </ReactMarkdown>
+              </div>
+            </div>
+
+            {/* Interactive Verified Sources Grid */}
+            {workflowState.sources && workflowState.sources.length > 0 && (
+              <div className="p-6 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30">
+                <div className="flex items-center gap-2 mb-3">
+                  <Globe className="h-4 w-4 text-sky-500" />
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
+                    Live Web Citations ({workflowState.sources.length})
+                  </h3>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {workflowState.sources.map((src, idx) => (
+                    <a
+                      key={idx}
+                      href={src.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="group rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/70 p-3.5 hover:border-indigo-500/50 transition-all flex flex-col justify-between"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between gap-1 mb-1">
+                          <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 truncate max-w-[160px]">
+                            {src.domain}
+                          </span>
+                          <ExternalLink className="h-3 w-3 text-zinc-400 group-hover:text-indigo-500 transition-colors" />
+                        </div>
+                        <h4 className="text-xs font-semibold text-zinc-900 dark:text-white line-clamp-2 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                          {src.title}
+                        </h4>
+                        {src.snippet && (
+                          <p className="text-[11px] text-zinc-500 dark:text-zinc-400 line-clamp-2 mt-1 italic">
+                            &quot;{src.snippet}&quot;
+                          </p>
+                        )}
+                      </div>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Technical DAG & Console Toggle Section */}
+        <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/80 overflow-hidden shadow-sm">
+          <button
+            onClick={() => setShowTechnicalCanvas(!showTechnicalCanvas)}
+            className="w-full flex items-center justify-between p-4 px-5 bg-zinc-50 dark:bg-zinc-900/60 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-colors text-left cursor-pointer"
+          >
+            <div className="flex items-center gap-2 text-xs font-semibold text-zinc-800 dark:text-zinc-200">
+              <Layers className="h-4 w-4 text-indigo-500" />
+              <span>Technical DAG Inspector & Live Agent Logs</span>
+              {stepsList.length > 0 && (
+                <span className="rounded-full bg-zinc-200 dark:bg-zinc-800 px-2 py-0.5 text-[10px] font-mono text-zinc-600 dark:text-zinc-400">
+                  {stepsList.length} Nodes
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-1.5 text-xs text-zinc-500">
+              <span>{showTechnicalCanvas ? "Hide Inspector" : "Show Inspector"}</span>
+              {showTechnicalCanvas ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </div>
+          </button>
+
+          {showTechnicalCanvas && (
+            <div className="flex flex-col border-t border-zinc-200 dark:border-zinc-800">
+              <TelemetryBar
+                state={workflowState}
+                isRunning={isRunning}
+                mode={mode}
+              />
+
+              <div className="flex flex-col lg:flex-row relative min-h-[460px] overflow-hidden">
+                <div className="flex-1 h-full min-h-[400px] relative">
+                  <DAGCanvas
+                    steps={stepsList}
+                    selectedStepId={selectedStepId}
+                    onSelectStep={(id) => setSelectedStepId(id)}
+                  />
+                </div>
+
+                <div className="w-full lg:w-96 h-full min-h-[300px] lg:min-h-0 border-t lg:border-t-0 lg:border-l border-zinc-200 dark:border-zinc-800 flex-shrink-0">
+                  <StepInspector
+                    step={selectedStep}
+                    onClose={() => setSelectedStepId(null)}
+                  />
+                </div>
+              </div>
+
+              <LiveConsole logs={logs} onClear={() => setLogs([])} />
+            </div>
+          )}
         </div>
       </main>
-
-      {/* History Drawer */}
-      <HistoryDrawer
-        isOpen={isHistoryOpen}
-        history={history}
-        onSelectRun={handleSelectHistoryRun}
-        onClearHistory={handleClearHistory}
-        onClose={() => setIsHistoryOpen(false)}
-      />
-
-      {/* Synthesis Modal */}
-      <SynthesisModal
-        isOpen={isSynthesisOpen}
-        onClose={() => setIsSynthesisOpen(false)}
-        markdownContent={workflowState?.final_result || null}
-        taskTitle={workflowState?.goal || ""}
-      />
     </div>
   );
 }

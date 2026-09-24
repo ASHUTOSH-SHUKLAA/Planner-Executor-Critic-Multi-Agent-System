@@ -47,8 +47,8 @@ class OrchestrationEngine:
         verbose: bool = True,
     ):
         self.gateway = gateway or LLMGateway()
-        fast_model = os.getenv("FAST_MODEL", "openai/gpt-oss-20b")
-        reasoning_model = os.getenv("DEFAULT_MODEL", "openai/gpt-oss-120b")
+        fast_model = os.getenv("FAST_MODEL") or getattr(self.gateway, "default_model", "gemini-3.6-flash")
+        reasoning_model = os.getenv("DEFAULT_MODEL") or getattr(self.gateway, "default_model", "gemini-3.6-flash")
 
         self.planner = planner or PlannerAgent(gateway=self.gateway, model=reasoning_model)
         self.executor = executor or ExecutorAgent(gateway=self.gateway, model=fast_model)

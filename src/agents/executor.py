@@ -1,10 +1,10 @@
 """
 Executor Agent: Executes individual steps from the Plan.
-Features scoped dependency injection (context filtering), structured StepOutput production,
-and critique-guided self-correction support.
+Features scoped dependency injection (context filtering), real tool invocation (live web search & scraper),
+structured StepOutput production with verified SourceCitations, and critique-guided self-correction support.
 """
 
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Any
 import time
 from rich.console import Console
 
@@ -13,19 +13,22 @@ from src.models.schemas import (
     StepOutput,
     StepStatus,
     WorkflowState,
+    SourceCitation,
 )
 from src.llm.client import LLMGateway, LLMResponse
+from src.tools.registry import ToolRegistry, default_tool_registry
 
 console = Console()
 
-EXECUTOR_SYSTEM_PROMPT = """You are an expert Autonomous Execution Specialist.
-Your role is to execute a specific atomic step from a broader project workflow with precision, depth, and factual rigor.
+EXECUTOR_SYSTEM_PROMPT = """You are an expert Autonomous Execution Specialist and Grounded Research Analyst.
+Your role is to execute a specific atomic step from a broader project workflow with precision, empirical depth, and factual rigor.
 
 ### EXECUTION GUIDELINES:
 1. **Focus Strictly on the Objective**: Accomplish the exact task described in the step objective. Do not wander into out-of-scope topics.
-2. **Utilize Dependency Context**: If outputs from preceding dependent steps are provided, incorporate their findings and build directly on top of them.
-3. **Handle Critic Feedback**: If feedback from a previous rejected attempt is provided, directly address and correct the identified issues.
-4. **Structured Deliverable**:
+2. **Utilize Live Evidence & Research**: If live web evidence or search results are provided in the prompt, rely directly on those verified facts, prices, specifications, and data. Do NOT invent or hallucinate figures.
+3. **Utilize Dependency Context**: If outputs from preceding dependent steps are provided, incorporate their findings and build directly on top of them.
+4. **Handle Critic Feedback**: If feedback from a previous rejected attempt is provided, directly address and correct the identified issues.
+5. **Structured Deliverable**:
    - Provide comprehensive, clear, and well-structured `content`.
    - Distill the most critical facts, numbers, or conclusions into explicit `key_findings`.
 
@@ -37,17 +40,18 @@ You must output a valid JSON object strictly complying with the StepOutput schem
 class ExecutorAgent:
     """
     Agent responsible for executing individual plan steps.
-    Enforces scoped context injection to prevent token waste and context pollution.
+    Integrates with ToolRegistry to execute live web searches and capture traceable citations.
     """
 
     def __init__(
         self,
         gateway: Optional[LLMGateway] = None,
+        tool_registry: Optional[ToolRegistry] = None,
         model: Optional[str] = None,
     ):
         self.gateway = gateway or LLMGateway()
-        # Default to the gateway's configured model (or fallback if mocked)
-        self.model = model or getattr(self.gateway, "default_model", "openai/gpt-oss-120b")
+        self.tool_registry = tool_registry or default_tool_registry
+        self.model = model or getattr(self.gateway, "default_model", "gemini-flash-lite-latest")
 
     def build_dependency_context(
         self,
@@ -65,7 +69,6 @@ class ExecutorAgent:
         for dep_id in step.dependencies:
             dep_output = state.step_outputs.get(dep_id)
             if dep_output:
-                # Find matching step title for clearer context
                 step_title = dep_id
                 if state.plan:
                     for s in state.plan.steps:
@@ -91,6 +94,29 @@ class ExecutorAgent:
 
         return "\n\n".join(context_blocks)
 
+    def _determine_search_query(self, step: PlanStep, task: str) -> Optional[str]:
+        """Constructs an effective web search query if the step requires research."""
+        if step.search_query and step.search_query.strip():
+            return step.search_query.strip()
+
+        title_lower = step.title.lower()
+        desc_lower = step.description.lower()
+        task_lower = task.lower()
+
+        # Check for indicators that external research is required
+        research_keywords = [
+            "research", "search", "pricing", "price", "specs", "specification",
+            "compare", "market", "model", "car", "diesel", "ev", "electric",
+            "cost", "latest", "benchmark", "analysis"
+        ]
+
+        needs_research = step.requires_research or any(k in title_lower or k in desc_lower for k in research_keywords)
+        if needs_research:
+            # Combine step title with overall task keywords for high precision
+            return f"{step.title} {task}".strip()[:100]
+
+        return None
+
     def execute_step(
         self,
         step: PlanStep,
@@ -98,28 +124,58 @@ class ExecutorAgent:
         critic_feedback: Optional[str] = None,
     ) -> LLMResponse[StepOutput]:
         """
-        Executes a single plan step using scoped dependency context and optional critic feedback.
-
-        Args:
-            step: The specific PlanStep to execute.
-            state: The shared WorkflowState (used to pull dependency outputs).
-            critic_feedback: Optional critique/instructions if this step is being retried.
-
-        Returns:
-            LLMResponse containing the validated StepOutput.
+        Executes a single plan step, optionally performing live web searches,
+        extracting source evidence, and generating validated StepOutput.
         """
-        # 1. Isolate relevant context
+        # 1. Isolate relevant dependency context
         dependency_context = self.build_dependency_context(step, state)
 
-        # 2. Construct targeted prompt
+        # 2. Check and perform live tool execution (web search)
+        collected_sources: List[SourceCitation] = []
+        evidence_text = ""
+
+        search_query = self._determine_search_query(step, state.task)
+        if search_query:
+            console.print(f"[dim cyan]  [Tool] Executing web_search: '{search_query}'[/dim cyan]")
+            tool_res = self.tool_registry.execute("web_search", query=search_query, max_results=4)
+
+            if tool_res.success and tool_res.data:
+                evidence_blocks = []
+                for idx, item in enumerate(tool_res.data, start=1):
+                    citation = SourceCitation(
+                        title=item.get("title", f"Source {idx}"),
+                        url=item.get("url", ""),
+                        domain=item.get("domain", ""),
+                        snippet=item.get("snippet", ""),
+                        retrieved_at=item.get("retrieved_at", ""),
+                        step_id=step.step_id,
+                    )
+                    collected_sources.append(citation)
+                    evidence_blocks.append(
+                        f"[{idx}] {citation.title} ({citation.domain})\n"
+                        f"    URL: {citation.url}\n"
+                        f"    Evidence Excerpt: {citation.snippet}"
+                    )
+
+                evidence_text = (
+                    "### VERIFIED LIVE WEB EVIDENCE GATHERED VIA SEARCH:\n"
+                    + "\n\n".join(evidence_blocks)
+                    + "\n\nCRITICAL: Base your analysis on these real findings, exact figures, and verified sources.\n"
+                )
+
+        # 3. Construct targeted prompt
         user_prompt = (
             f"### OVERALL WORKFLOW OBJECTIVE:\n{state.task}\n\n"
             f"### CURRENT STEP TO EXECUTE:\n"
             f"Step ID: {step.step_id}\n"
             f"Title: {step.title}\n"
             f"Objective: {step.description}\n\n"
-            f"### PRECEDING STEP CONTEXT (DEPENDENCIES):\n{dependency_context}\n"
         )
+
+        if evidence_text:
+            user_prompt += f"{evidence_text}\n"
+
+        user_prompt += f"### PRECEDING STEP CONTEXT (DEPENDENCIES):\n{dependency_context}\n"
 
         if critic_feedback:
             user_prompt += (
@@ -128,13 +184,13 @@ class ExecutorAgent:
             )
 
         user_prompt += (
-            "\nExecute this step thoroughly. Produce rich, substantive content and "
+            "\nExecute this step thoroughly. Produce rich, substantive content with real data and "
             "extract the key actionable findings."
         )
 
         start_time = time.perf_counter()
 
-        # 3. Call LLM with strict StepOutput schema
+        # 4. Call LLM with strict StepOutput schema
         response: LLMResponse[StepOutput] = self.gateway.generate_structured(
             system_prompt=EXECUTOR_SYSTEM_PROMPT,
             user_prompt=user_prompt,
@@ -145,11 +201,12 @@ class ExecutorAgent:
 
         duration = time.perf_counter() - start_time
 
-        # Ensure step_id and execution telemetry are correctly populated
+        # Ensure step_id, execution telemetry, and verified sources are populated
         if response.parsed:
             response.parsed.step_id = step.step_id
             response.parsed.execution_time_seconds = round(duration, 3)
             response.parsed.tokens_used = response.total_tokens
+            response.parsed.sources = collected_sources
 
         return response
 
@@ -160,7 +217,7 @@ class ExecutorAgent:
         critic_feedback: Optional[str] = None,
     ) -> WorkflowState:
         """
-        Convenience method to execute a specific step in the workflow and record its result.
+        Executes a specific step in the workflow, updates state with outputs and gathered citations.
         """
         if not state.plan:
             raise ValueError("Cannot execute step: Workflow has no plan.")
@@ -183,6 +240,14 @@ class ExecutorAgent:
             target_step.status = StepStatus.IN_PROGRESS  # Awaits Critic review
             state.total_tokens += response.total_tokens
             state.estimated_cost_usd += response.estimated_cost_usd
+
+            # Append new unique sources to the workflow state
+            if response.parsed and response.parsed.sources:
+                existing_urls = {s.url for s in state.sources}
+                for src in response.parsed.sources:
+                    if src.url not in existing_urls:
+                        state.sources.append(src)
+                        existing_urls.add(src.url)
 
         except Exception as e:
             target_step.status = StepStatus.FAILED

@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from src.api.database import init_db
 from src.api.auth import router as auth_router
 from src.api.routes.workflows import router as workflows_router
+from src.api.routes.admin import router as admin_router
 from src.llm.client import LLMGateway
 
 
@@ -44,13 +45,14 @@ app.add_middleware(
 # Mount Routers
 app.include_router(auth_router)
 app.include_router(workflows_router)
+app.include_router(admin_router)
 
 
 @app.get("/api/health", tags=["Health"])
 def health_check():
     return {
         "status": "healthy",
-        "service": "Multi-Agent Orchestration Engine",
+        "service": "TriadFlow Multi-Agent Research Platform",
         "version": "1.0.0",
     }
 
@@ -61,16 +63,18 @@ def system_info():
     return {
         "default_model": gateway.default_model,
         "supported_models": [
-            "openai/gpt-oss-120b",
-            "openai/gpt-oss-20b",
-            "qwen/qwen3.8-27b",
+            "gemini-3.6-flash",
+            "gemini-2.5-pro",
+            "gemini-1.5-flash",
         ],
         "features": [
             "Dynamic DAG Task Planning",
-            "Scoped Context Execution",
-            "3-Axis Critic Auditing",
+            "Live Web Research & Tool Execution",
+            "Verifiable Traceable Citations",
+            "3-Axis Critic Auditing & Quality Gates",
             "Bounded Retries & Dynamic Re-planning",
             "Parallel Wave Execution",
+            "Role-Based Access Control & Strict Ownership",
             "Real-time SSE Streaming",
         ],
     }

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/lib/toast-context";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -10,14 +10,20 @@ import { Bot, Lock, User, Mail, ArrowRight, AlertCircle } from "lucide-react";
 
 export default function SignupPage() {
   const router = useRouter();
-  const { register } = useAuth();
+  const { register, isAuthenticated } = useAuth();
   const { success } = useToast();
 
-  const [username, setUsername] = useState("");
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.push("/dashboard");
+    }
+  }, [isAuthenticated, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,8 +31,8 @@ export default function SignupPage() {
     setIsLoading(true);
 
     try {
-      await register(username, email, password);
-      success(`Account created successfully! Welcome, @${username}!`, "Registered");
+      await register(name, email, password);
+      success("Account created successfully! Welcome to TriadFlow.", "Registered");
       router.push("/dashboard");
     } catch (err: any) {
       setError(err.message || "Failed to create account. Please try again.");
@@ -62,7 +68,7 @@ export default function SignupPage() {
             Create your account
           </h1>
           <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
-            Start orchestrating multi-agent DAG workflows
+            Start autonomous multi-agent research with verified sources
           </p>
         </div>
 
@@ -76,16 +82,16 @@ export default function SignupPage() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
-              Username
+              Full Name
             </label>
             <div className="relative">
               <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400 dark:text-zinc-500" />
               <input
                 type="text"
                 required
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="developer"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Jane Doe"
                 className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 py-2.5 pl-10 pr-4 text-sm text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-colors"
               />
             </div>
@@ -129,7 +135,7 @@ export default function SignupPage() {
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full flex items-center justify-center gap-2 rounded-xl bg-indigo-600 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 hover:bg-indigo-500 transition-all disabled:opacity-50 mt-2"
+            className="w-full flex items-center justify-center gap-2 rounded-xl bg-indigo-600 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 hover:bg-indigo-500 transition-all disabled:opacity-50 mt-2 cursor-pointer"
           >
             {isLoading ? (
               <span className="flex items-center gap-2">
@@ -150,11 +156,6 @@ export default function SignupPage() {
             Already have an account?{" "}
             <Link href="/login" className="text-indigo-600 dark:text-indigo-400 hover:underline font-medium">
               Sign in
-            </Link>
-          </div>
-          <div>
-            <Link href="/dashboard" className="text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors">
-              Continue to Studio as Guest →
             </Link>
           </div>
         </div>

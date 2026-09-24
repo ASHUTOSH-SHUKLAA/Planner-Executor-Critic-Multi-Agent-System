@@ -1,5 +1,5 @@
-# Core LLM Integration
-groq>=0.11.0
+# Core LLM Integration (Google Gemini)
+google-genai>=2.25.0
 
 # Data Validation & Serialization
 pydantic>=2.7.0

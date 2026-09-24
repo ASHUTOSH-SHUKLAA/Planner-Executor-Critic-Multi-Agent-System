@@ -1,6 +1,7 @@
 """
 Authentication & Authorization Layer for FastAPI Backend.
 Uses bcrypt for secure password hashing and PyJWT for stateless bearer tokens.
+Enforces strict Role-Based Access Control (RBAC) and user ownership.
 """
 
 import os
@@ -19,7 +20,7 @@ from src.api.database import (
 )
 
 # JWT Secret and Configuration
-SECRET_KEY = os.getenv("JWT_SECRET", "super-secret-ojt-multiagent-jwt-key-2026")
+SECRET_KEY = os.getenv("JWT_SECRET", "super-secret-triadflow-multiagent-jwt-key-2026")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_HOURS = 24 * 7  # 7-day token
 
@@ -44,6 +45,7 @@ class UserResponse(BaseModel):
     id: int
     name: str
     email: str
+    role: str = "user"
 
 
 class TokenResponse(BaseModel):
@@ -73,6 +75,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 
 
 def get_current_user(token: str = Depends(oauth2_scheme)) -> Dict[str, Any]:
+    """Mandatory authentication guard. Rejects unauthenticated requests."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -92,18 +95,14 @@ def get_current_user(token: str = Depends(oauth2_scheme)) -> Dict[str, Any]:
     return user
 
 
-def get_optional_current_user(token: Optional[str] = Depends(OAuth2PasswordBearer(tokenUrl="/api/auth/token", auto_error=False))) -> Optional[Dict[str, Any]]:
-    """Allows guest execution while attaching user ID if token is provided."""
-    if not token:
-        return None
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id = payload.get("sub")
-        if user_id:
-            return get_user_by_id(int(user_id))
-    except Exception:
-        return None
-    return None
+def require_admin(current_user: Dict[str, Any] = Depends(get_current_user)) -> Dict[str, Any]:
+    """RBAC Guard: Restricts endpoint access strictly to users with role='admin'."""
+    if current_user.get("role") != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: Administrative privileges required.",
+        )
+    return current_user
 
 
 # --- Endpoints ---
@@ -114,12 +113,12 @@ def register(req: RegisterRequest):
         raise HTTPException(status_code=400, detail="An account with this email already exists.")
 
     pw_hash = hash_password(req.password)
-    user = create_user(email=req.email, name=req.name, password_hash=pw_hash)
+    user = create_user(email=req.email, name=req.name, password_hash=pw_hash, role="user")
 
-    token = create_access_token(data={"sub": str(user["id"]), "email": user["email"]})
+    token = create_access_token(data={"sub": str(user["id"]), "email": user["email"], "role": user["role"]})
     return TokenResponse(
         access_token=token,
-        user=UserResponse(id=user["id"], name=user["name"], email=user["email"]),
+        user=UserResponse(id=user["id"], name=user["name"], email=user["email"], role=user["role"]),
     )
 
 
@@ -129,10 +128,11 @@ def login(req: LoginRequest):
     if not user or not verify_password(req.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid email or password.")
 
-    token = create_access_token(data={"sub": str(user["id"]), "email": user["email"]})
+    user_role = user.get("role", "user")
+    token = create_access_token(data={"sub": str(user["id"]), "email": user["email"], "role": user_role})
     return TokenResponse(
         access_token=token,
-        user=UserResponse(id=user["id"], name=user["name"], email=user["email"]),
+        user=UserResponse(id=user["id"], name=user["name"], email=user["email"], role=user_role),
     )
 
 
@@ -143,10 +143,11 @@ def login_for_swagger(form_data: OAuth2PasswordRequestForm = Depends()):
     if not user or not verify_password(form_data.password, user["password_hash"]):
         raise HTTPException(status_code=400, detail="Incorrect email or password")
 
-    token = create_access_token(data={"sub": str(user["id"]), "email": user["email"]})
+    user_role = user.get("role", "user")
+    token = create_access_token(data={"sub": str(user["id"]), "email": user["email"], "role": user_role})
     return TokenResponse(
         access_token=token,
-        user=UserResponse(id=user["id"], name=user["name"], email=user["email"]),
+        user=UserResponse(id=user["id"], name=user["name"], email=user["email"], role=user_role),
     )
 
 
@@ -156,4 +157,5 @@ def get_profile(current_user: Dict[str, Any] = Depends(get_current_user)):
         id=current_user["id"],
         name=current_user["name"],
         email=current_user["email"],
+        role=current_user.get("role", "user"),
     )

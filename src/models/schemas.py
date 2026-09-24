@@ -4,10 +4,16 @@ Uses Pydantic v2 for runtime validation, serialization, and schema generation.
 """
 
 from enum import Enum
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 from datetime import datetime, timezone
 import uuid
 from pydantic import BaseModel, Field, model_validator
+
+
+class UserRole(str, Enum):
+    """User authorization roles."""
+    USER = "user"
+    ADMIN = "admin"
 
 
 class StepStatus(str, Enum):
@@ -26,6 +32,20 @@ class CriticDecision(str, Enum):
     REJECT = "REJECT"
 
 
+class SourceCitation(BaseModel):
+    """Represents a verified external research source with full traceability."""
+    id: str = Field(
+        default_factory=lambda: f"src_{uuid.uuid4().hex[:6]}",
+        description="Unique reference ID for this source (e.g., [src_a1b2c3])"
+    )
+    title: str = Field(description="Title of the source webpage or publication")
+    url: str = Field(description="Direct URL to the source")
+    domain: str = Field(description="Domain name of the source (e.g., cardekho.com)")
+    snippet: str = Field(description="Extracted factual excerpt or text snippet")
+    retrieved_at: str = Field(description="ISO timestamp of when the source was retrieved")
+    step_id: Optional[str] = Field(default=None, description="Plan step that gathered this source")
+
+
 class PlanStep(BaseModel):
     """Represents a single atomic step in an execution plan."""
     step_id: str = Field(
@@ -40,6 +60,14 @@ class PlanStep(BaseModel):
     dependencies: List[str] = Field(
         default_factory=list,
         description="List of step_ids that MUST be completed before this step can execute"
+    )
+    requires_research: bool = Field(
+        default=False,
+        description="Whether this step requires external web research or live data collection"
+    )
+    search_query: Optional[str] = Field(
+        default=None,
+        description="Target search query to execute if research is required"
     )
     status: StepStatus = Field(
         default=StepStatus.PENDING,
@@ -99,6 +127,10 @@ class StepOutput(BaseModel):
     key_findings: List[str] = Field(
         default_factory=list,
         description="Bullet points of key findings or factual statements"
+    )
+    sources: List[SourceCitation] = Field(
+        default_factory=list,
+        description="Verified external research sources backing this step"
     )
     execution_time_seconds: float = Field(
         default=0.0,
@@ -160,6 +192,10 @@ class WorkflowState(BaseModel):
         default_factory=lambda: f"wf_{uuid.uuid4().hex[:8]}",
         description="Unique identifier for this workflow session"
     )
+    user_id: Optional[int] = Field(
+        default=None,
+        description="Owner user ID who initiated this workflow"
+    )
     task: str = Field(
         description="The initial natural-language user prompt"
     )
@@ -174,6 +210,14 @@ class WorkflowState(BaseModel):
     step_outputs: Dict[str, StepOutput] = Field(
         default_factory=dict,
         description="Validated outputs indexed by step_id"
+    )
+    sources: List[SourceCitation] = Field(
+        default_factory=list,
+        description="Aggregated list of all verified sources collected across steps"
+    )
+    research_results: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="Raw research and search result telemetry"
     )
     critic_reviews: Dict[str, List[CriticReview]] = Field(
         default_factory=dict,

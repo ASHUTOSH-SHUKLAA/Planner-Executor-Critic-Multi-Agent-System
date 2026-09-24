@@ -90,8 +90,8 @@ export function TelemetryBar({
     ? Object.values(state.step_outputs).filter((s) => s.status === "PASSED").length
     : 0;
 
-  const totalTokens = state?.telemetry?.total_tokens || state?.total_tokens || 0;
-  const estimatedCost = state?.telemetry?.estimated_cost_usd || state?.total_cost || 0;
+  const totalTokens = state?.total_tokens || state?.telemetry?.total_tokens || 0;
+  const estimatedCost = state?.estimated_cost_usd || state?.telemetry?.estimated_cost_usd || 0;
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-4 px-4 py-2.5 border-b border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-950/80 text-xs transition-colors">
@@ -129,7 +129,7 @@ export function TelemetryBar({
           <span>${estimatedCost.toFixed(5)}</span>
         </div>
 
-        {state && state.replan_count > 0 && (
+        {state && (state.replan_count ?? 0) > 0 && (
           <div className="flex items-center gap-1 text-amber-500" title="Dynamic Re-plans Triggered">
             <RefreshCw className="h-3.5 w-3.5" />
             <span>Replans: {state.replan_count}</span>

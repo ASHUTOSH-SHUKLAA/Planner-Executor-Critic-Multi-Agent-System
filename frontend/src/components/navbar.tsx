@@ -7,15 +7,16 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { SettingsModal } from "@/components/settings-modal";
 import {
   Bot,
-  Sparkles,
   LogOut,
   ArrowRight,
   LayoutDashboard,
+  History,
+  ShieldCheck,
   Sliders,
 } from "lucide-react";
 
 export function Navbar() {
-  const { user, isAuthenticated, logout } = useAuth();
+  const { user, isAuthenticated, isAdmin, logout } = useAuth();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   return (
@@ -33,7 +34,7 @@ export function Navbar() {
                   TriadFlow
                 </span>
                 <span className="rounded-full bg-indigo-500/10 border border-indigo-500/20 px-1.5 py-0.2 text-[10px] font-medium text-indigo-600 dark:text-indigo-400">
-                  Triad Engine
+                  AI Research
                 </span>
               </div>
               <span className="text-[10px] text-zinc-500 dark:text-zinc-400 -mt-0.5">
@@ -43,19 +44,47 @@ export function Navbar() {
           </Link>
 
           {/* Navigation Links */}
-          <nav className="hidden md:flex items-center gap-7 text-sm font-medium text-zinc-600 dark:text-zinc-400">
-            <Link href="/#triad" className="hover:text-zinc-900 dark:hover:text-white transition-colors">
-              Triad System
-            </Link>
-            <Link href="/#architecture" className="hover:text-zinc-900 dark:hover:text-white transition-colors">
-              Architecture
-            </Link>
-            <Link href="/#features" className="hover:text-zinc-900 dark:hover:text-white transition-colors">
-              Features
-            </Link>
-            <Link href="/#benchmarks" className="hover:text-zinc-900 dark:hover:text-white transition-colors">
-              Benchmarks
-            </Link>
+          <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-zinc-600 dark:text-zinc-400">
+            {isAuthenticated ? (
+              <>
+                <Link
+                  href="/dashboard"
+                  className="flex items-center gap-1.5 hover:text-zinc-900 dark:hover:text-white transition-colors"
+                >
+                  <LayoutDashboard className="h-4 w-4 text-indigo-500" />
+                  <span>Workspace</span>
+                </Link>
+                <Link
+                  href="/history"
+                  className="flex items-center gap-1.5 hover:text-zinc-900 dark:hover:text-white transition-colors"
+                >
+                  <History className="h-4 w-4 text-emerald-500" />
+                  <span>History</span>
+                </Link>
+                {isAdmin && (
+                  <Link
+                    href="/admin"
+                    className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 transition-colors font-semibold"
+                  >
+                    <ShieldCheck className="h-4 w-4" />
+                    <span>Admin</span>
+                  </Link>
+                )}
+              </>
+            ) : (
+              <>
+                <Link href="/#triad" className="hover:text-zinc-900 dark:hover:text-white transition-colors">
+                  Multi-Agent Triad
+                </Link>
+                <Link href="/#architecture" className="hover:text-zinc-900 dark:hover:text-white transition-colors">
+                  Architecture
+                </Link>
+                <Link href="/#features" className="hover:text-zinc-900 dark:hover:text-white transition-colors">
+                  Features
+                </Link>
+              </>
+            )}
+
             <Link
               href="https://github.com/ASHUTOSH-SHUKLAA/Planner-Executor-Critic-Multi-Agent-System"
               target="_blank"
@@ -82,7 +111,7 @@ export function Navbar() {
             <button
               onClick={() => setIsSettingsOpen(true)}
               title="Studio Settings"
-              className="inline-flex items-center justify-center h-9 w-9 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-900/80 text-zinc-600 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors shadow-xs"
+              className="inline-flex items-center justify-center h-9 w-9 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-900/80 text-zinc-600 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors shadow-xs cursor-pointer"
             >
               <Sliders className="h-4 w-4" />
             </button>
@@ -90,25 +119,23 @@ export function Navbar() {
             {/* Auth CTA Actions */}
             {isAuthenticated && user ? (
               <div className="flex items-center gap-2 pl-1">
-                <Link
-                  href="/dashboard"
-                  className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3.5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 transition-colors"
-                >
-                  <LayoutDashboard className="h-4 w-4" />
-                  <span>Studio</span>
-                </Link>
-                <div className="hidden sm:flex items-center gap-2 pl-2 border-l border-zinc-200 dark:border-zinc-800">
-                  <span className="text-xs text-zinc-600 dark:text-zinc-400 font-mono">
-                    @{user.username}
+                <div className="hidden sm:flex items-center gap-2 px-2.5 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
+                  <span className="text-xs font-medium text-zinc-800 dark:text-zinc-200 truncate max-w-[140px]">
+                    {user.name || user.email}
                   </span>
-                  <button
-                    onClick={logout}
-                    title="Sign out"
-                    className="p-1.5 text-zinc-400 hover:text-red-500 transition-colors rounded hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                  >
-                    <LogOut className="h-4 w-4" />
-                  </button>
+                  {isAdmin && (
+                    <span className="rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px] font-bold px-1 py-0.5 uppercase tracking-wide">
+                      Admin
+                    </span>
+                  )}
                 </div>
+                <button
+                  onClick={logout}
+                  title="Sign out"
+                  className="p-2 text-zinc-400 hover:text-red-500 transition-colors rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer"
+                >
+                  <LogOut className="h-4 w-4" />
+                </button>
               </div>
             ) : (
               <div className="flex items-center gap-2">

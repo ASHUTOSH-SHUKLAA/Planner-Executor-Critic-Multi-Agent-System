@@ -8,8 +8,9 @@ interface AuthContextType {
   token: string | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (username: string, password: string) => Promise<void>;
-  register: (username: string, email: string, password: string) => Promise<void>;
+  isAdmin: boolean;
+  login: (email: string, password: string) => Promise<void>;
+  register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -45,15 +46,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const login = async (username: string, password: string) => {
-    const res = await apiLogin(username, password);
+  const login = async (email: string, password: string) => {
+    const res = await apiLogin(email, password);
     localStorage.setItem(TOKEN_KEY, res.access_token);
     setToken(res.access_token);
     setUser(res.user);
   };
 
-  const register = async (username: string, email: string, password: string) => {
-    const res = await apiRegister(username, email, password);
+  const register = async (name: string, email: string, password: string) => {
+    const res = await apiRegister(name, email, password);
     localStorage.setItem(TOKEN_KEY, res.access_token);
     setToken(res.access_token);
     setUser(res.user);
@@ -72,6 +73,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         token,
         isLoading,
         isAuthenticated: !!user && !!token,
+        isAdmin: user?.role === "admin",
         login,
         register,
         logout,

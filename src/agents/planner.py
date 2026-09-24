@@ -23,11 +23,14 @@ Your job is to take a complex user objective and break it down into an optimal, 
    - If a step requires analysis, synthesis, or comparison of previous steps, it MUST list those exact `step_id`s in its `dependencies`.
    - Never invent dependencies that do not exist.
    - Never create circular dependencies (A depends on B, B depends on A).
-4. **Optimal Granularity**:
+4. **Identify External Research Needs**:
+   - If a step requires current market data, pricing, vehicle specifications, benchmarks, or real-world facts, set `requires_research: true`.
+   - Provide a precise, targeted `search_query` for that step (e.g. "best electric cars in India under 10 lakh on-road price 2026").
+5. **Optimal Granularity**:
    - Avoid creating too few steps (e.g., 1 giant step that does everything).
    - Avoid creating too many trivial steps (e.g., 10 one-sentence tasks).
    - Typically, 3 to 6 well-scoped steps provide the ideal balance.
-5. **Always End with Synthesis / Decision**:
+6. **Always End with Synthesis / Decision**:
    - The final step should synthesize findings, draw conclusions, or produce the requested final deliverable.
 
 ### OUTPUT REQUIREMENT:
@@ -46,7 +49,7 @@ class PlannerAgent:
         model: Optional[str] = None,
     ):
         self.gateway = gateway or LLMGateway()
-        self.model = model or getattr(self.gateway, "default_model", "openai/gpt-oss-120b")
+        self.model = model or getattr(self.gateway, "default_model", "gemini-flash-lite-latest")
 
     def create_plan(
         self,

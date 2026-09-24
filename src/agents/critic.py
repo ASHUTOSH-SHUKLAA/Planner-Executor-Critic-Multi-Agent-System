@@ -32,6 +32,9 @@ Your mission is to rigorously evaluate an Executor's output for an assigned work
    - Are the extracted `key_findings` genuinely informative and supported by the text?
 3. **Relevance (0.0 - 1.0)**:
    - Is the content directly focused on the step objective, or is it padded with filler or tangential digressions?
+4. **Evidence & Grounding (0.0 - 1.0)**:
+   - Are factual assertions, prices, and specifications backed by gathered evidence/sources?
+   - Is there any baseless hallucination or fabricated data?
 
 ### DECISION CRITERIA:
 - **PASS**: Only emit PASS if Correctness, Completeness, and Relevance all meet high quality standards (typically >= 0.70 each) and there are NO serious factual errors or critical omissions.
@@ -59,8 +62,8 @@ class CriticAgent:
         pass_threshold: float = 0.70,
     ):
         self.gateway = gateway or LLMGateway()
-        # The Critic should use the most capable reasoning model available
-        self.model = model or getattr(self.gateway, "default_model", "openai/gpt-oss-120b")
+        # The Critic should use the capable reasoning model available
+        self.model = model or getattr(self.gateway, "default_model", "gemini-flash-lite-latest")
         self.pass_threshold = pass_threshold
 
     def evaluate_output(
@@ -97,13 +100,15 @@ class CriticAgent:
             )
 
         findings_text = "\n".join(f"- {f}" for f in output.key_findings) if output.key_findings else "None provided"
+        sources_summary = "\n".join(f"- {s.title} ({s.domain}): {s.url}" for s in output.sources) if getattr(output, "sources", None) else "None"
 
         user_prompt += (
             f"### EXECUTOR SUBMITTED DELIVERABLE:\n"
             f"Content:\n{output.content}\n\n"
             f"Key Findings:\n{findings_text}\n\n"
+            f"Sources Cited:\n{sources_summary}\n\n"
             f"### YOUR AUDIT INSTRUCTIONS:\n"
-            f"Evaluate the deliverable against Correctness, Completeness, and Relevance. "
+            f"Evaluate the deliverable against Correctness, Completeness, Relevance, and Grounding. "
             f"Determine whether it earns a PASS or REJECT verdict. If any dimension is below "
             f"{self.pass_threshold} or contains significant errors, you must REJECT it and explain why."
         )

@@ -1,12 +1,13 @@
 """
-Workflow Execution & Streaming Endpoints.
-Provides REST and Server-Sent Events (SSE) streaming for real-time DAG visualizations.
+Workflow Execution, Streaming, and Download Endpoints.
+Provides REST and Server-Sent Events (SSE) streaming for real-time AI research workflows.
+Enforces strict JWT authentication, resource ownership, and validated report exports.
 """
 
 import json
 import asyncio
 from typing import Optional, List, Dict, Any, Literal
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Response
 from pydantic import BaseModel, Field, model_validator
 from sse_starlette.sse import EventSourceResponse
 
@@ -15,9 +16,10 @@ from src.models.schemas import (
     WorkflowStatus,
     StepStatus,
     CriticDecision,
+    SourceCitation,
 )
 from src.orchestrator.engine import OrchestrationEngine
-from src.api.auth import get_optional_current_user, get_current_user
+from src.api.auth import get_current_user
 from src.api.database import (
     save_workflow_record,
     list_user_workflows,
@@ -36,7 +38,7 @@ class RunWorkflowRequest(BaseModel):
     def resolve_task_prompt(self):
         prompt = self.task or self.goal
         if not prompt or len(prompt.strip()) < 3:
-            raise ValueError("Task or goal prompt must be at least 3 characters.")
+            raise ValueError("Task prompt must be at least 3 characters.")
         self.task = prompt.strip()
         return self
 
@@ -52,11 +54,11 @@ class WorkflowSummaryResponse(BaseModel):
 
 @router.get("", response_model=List[WorkflowSummaryResponse])
 def get_user_workflows(
-    current_user: Optional[Dict[str, Any]] = Depends(get_optional_current_user),
-    limit: int = Query(default=20, ge=1, le=100),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    limit: int = Query(default=50, ge=1, le=100),
 ):
-    user_id = current_user["id"] if current_user else None
-    records = list_user_workflows(user_id=user_id, limit=limit)
+    """Fetches workflows belonging strictly to the authenticated user."""
+    records = list_user_workflows(user_id=current_user["id"], limit=limit)
     return [
         WorkflowSummaryResponse(
             workflow_id=r["workflow_id"],
@@ -71,33 +73,109 @@ def get_user_workflows(
 
 
 @router.get("/{workflow_id}")
-def get_workflow(workflow_id: str):
-    record = get_workflow_record(workflow_id)
+def get_workflow(
+    workflow_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """Enforces resource ownership: user can only view their own tasks, or admin can view any."""
+    is_admin = current_user.get("role") == "admin"
+    record = get_workflow_record(
+        workflow_id=workflow_id,
+        user_id=current_user["id"],
+        is_admin=is_admin,
+    )
     if not record:
-        raise HTTPException(status_code=404, detail=f"Workflow '{workflow_id}' not found.")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Workflow '{workflow_id}' not found or access denied.",
+        )
     return record
+
+
+@router.get("/{workflow_id}/download")
+def download_workflow_report(
+    workflow_id: str,
+    format: Literal["md", "txt"] = "md",
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """
+    Downloads the actual generated result report with full citations and metadata.
+    Validates that the final report exists and is non-empty before downloading.
+    """
+    is_admin = current_user.get("role") == "admin"
+    record = get_workflow_record(
+        workflow_id=workflow_id,
+        user_id=current_user["id"],
+        is_admin=is_admin,
+    )
+    if not record:
+        raise HTTPException(status_code=404, detail="Workflow not found.")
+
+    state_dict = record.get("state", {})
+    final_result = state_dict.get("final_result")
+    if not final_result or not final_result.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot download: Final report has not been generated for this workflow.",
+        )
+
+    task_title = record.get("task", "Research Task")
+    created_at = record.get("created_at", "")
+    sources = state_dict.get("sources", [])
+
+    # Format document
+    lines = [
+        f"# TriadFlow Research Report: {task_title}",
+        f"**Date:** {created_at}",
+        f"**Workflow ID:** `{workflow_id}`",
+        f"**Tokens Consumed:** {record.get('total_tokens', 0):,}",
+        f"**Status:** {record.get('status', 'COMPLETED')}",
+        "\n---\n",
+        "## Executive Summary & Findings\n",
+        final_result.strip(),
+    ]
+
+    if sources:
+        lines.append("\n\n---\n## Verified Sources & Evidence\n")
+        for idx, src in enumerate(sources, start=1):
+            title = src.get("title", f"Source {idx}")
+            url = src.get("url", "#")
+            domain = src.get("domain", "")
+            snippet = src.get("snippet", "").strip()
+            lines.append(f"{idx}. **[{title}]({url})** — *{domain}*")
+            if snippet:
+                lines.append(f"   > \"{snippet}\"\n")
+
+    content = "\n".join(lines)
+    filename = f"triadflow_{workflow_id}.{format}"
+    media_type = "text/markdown" if format == "md" else "text/plain"
+
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.post("/run-stream")
 async def run_workflow_stream(
     req: RunWorkflowRequest,
-    current_user: Optional[Dict[str, Any]] = Depends(get_optional_current_user),
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """
-    Executes a workflow and streams real-time Server-Sent Events (SSE) to the browser.
-    Powers the live React Flow DAG visualizer in the Next.js frontend!
+    Executes an autonomous research workflow and streams real-time Server-Sent Events (SSE).
+    Guaranteed JWT authentication, live tool execution, citations capture, and synthesis delivery.
     """
-    user_id = current_user["id"] if current_user else None
+    user_id = current_user["id"]
 
     async def event_generator():
-        # Bridge queue to capture internal agent events
         queue: asyncio.Queue = asyncio.Queue()
         engine = OrchestrationEngine(verbose=False)
 
         async def worker():
             try:
                 # 1. Task Intake
-                state = WorkflowState(task=req.task.strip())
+                state = WorkflowState(task=req.task.strip(), user_id=user_id)
                 await queue.put({
                     "event": "workflow_started",
                     "data": {
@@ -138,65 +216,85 @@ async def run_workflow_stream(
                         "event": "wave_started",
                         "data": {
                             "step_ids": [s.step_id for s in batch],
-                            "mode": req.mode,
+                            "count": len(batch),
                         }
                     })
 
-                    # Helper for single step with live event dispatching
                     async def run_single_step(step):
-                        await queue.put({
-                            "event": "step_executing",
-                            "data": {"step_id": step.step_id, "title": step.title}
-                        })
-
-                        # Execute
-                        dep_context = engine.executor.build_dependency_context(step, state)
-                        exec_res = await asyncio.to_thread(engine.executor.execute_step, step=step, state=state)
-                        
                         async with lock:
-                            state.step_outputs[step.step_id] = exec_res.parsed
-                            state.total_tokens += exec_res.total_tokens
-                            state.estimated_cost_usd += exec_res.estimated_cost_usd
-
+                            step.status = StepStatus.IN_PROGRESS
                         await queue.put({
-                            "event": "step_executed",
+                            "event": "step_started",
                             "data": {
                                 "step_id": step.step_id,
-                                "output": exec_res.parsed.model_dump(),
-                                "duration": exec_res.parsed.execution_time_seconds,
+                                "title": step.title,
+                                "requires_research": getattr(step, "requires_research", False),
+                            }
+                        })
+
+                        # Execute step in worker thread (with live web search if needed)
+                        exec_resp = await asyncio.to_thread(
+                            engine.executor.execute_step,
+                            step=step,
+                            state=state,
+                        )
+
+                        async with lock:
+                            state.step_outputs[step.step_id] = exec_resp.parsed
+                            state.total_tokens += exec_resp.total_tokens
+                            state.estimated_cost_usd += exec_resp.estimated_cost_usd
+
+                            # Accumulate new sources
+                            if exec_resp.parsed and exec_resp.parsed.sources:
+                                existing_urls = {s.url for s in state.sources}
+                                for src in exec_resp.parsed.sources:
+                                    if src.url not in existing_urls:
+                                        state.sources.append(src)
+                                        existing_urls.add(src.url)
+
+                        # Notify frontend of deliverable & gathered sources
+                        await queue.put({
+                            "event": "step_completed",
+                            "data": {
+                                "step_id": step.step_id,
+                                "title": step.title,
+                                "output": exec_resp.parsed.content if exec_resp.parsed else "",
+                                "key_findings": exec_resp.parsed.key_findings if exec_resp.parsed else [],
+                                "sources": [s.model_dump() for s in (exec_resp.parsed.sources or [])],
+                                "latency": exec_resp.latency_seconds,
                             }
                         })
 
                         # Critic Audit
                         await queue.put({
-                            "event": "critic_reviewing",
+                            "event": "critic_audit_started",
                             "data": {"step_id": step.step_id}
                         })
-
-                        critic_res = await asyncio.to_thread(
+                        dep_context = engine.executor.build_dependency_context(step, state)
+                        critic_resp = await asyncio.to_thread(
                             engine.critic.evaluate_output,
                             step=step,
-                            output=exec_res.parsed,
+                            output=exec_resp.parsed,
                             task_objective=state.task,
                             dependency_context=dep_context,
                         )
-                        latest_rev = critic_res.parsed
 
+                        latest_rev = critic_resp.parsed
                         async with lock:
                             if step.step_id not in state.critic_reviews:
                                 state.critic_reviews[step.step_id] = []
                             state.critic_reviews[step.step_id].append(latest_rev)
-                            state.total_tokens += critic_res.total_tokens
-                            state.estimated_cost_usd += critic_res.estimated_cost_usd
+                            state.total_tokens += critic_resp.total_tokens
+                            state.estimated_cost_usd += critic_resp.estimated_cost_usd
 
-                        # Handle retries if rejected
+                        # Bounded Retry Loop if rejected
                         while latest_rev.decision == CriticDecision.REJECT:
                             current_retries = state.retry_counts.get(step.step_id, 0)
                             if current_retries < engine.max_step_retries:
                                 state.retry_counts[step.step_id] = current_retries + 1
                                 step.status = StepStatus.RETRYING
                                 await queue.put({
-                                    "event": "step_retrying",
+                                    "event": "step_retry",
                                     "data": {
                                         "step_id": step.step_id,
                                         "attempt": current_retries + 1,
@@ -205,18 +303,30 @@ async def run_workflow_stream(
                                     }
                                 })
                                 feedback = f"Critique: {latest_rev.critique}\nFixes: {'; '.join(latest_rev.suggested_fixes)}"
-                                exec_res = await asyncio.to_thread(engine.executor.execute_step, step=step, state=state, critic_feedback=feedback)
+                                retry_resp = await asyncio.to_thread(
+                                    engine.executor.execute_step,
+                                    step=step,
+                                    state=state,
+                                    critic_feedback=feedback,
+                                )
                                 async with lock:
-                                    state.step_outputs[step.step_id] = exec_res.parsed
-                                    state.total_tokens += exec_res.total_tokens
-                                    state.estimated_cost_usd += exec_res.estimated_cost_usd
+                                    state.step_outputs[step.step_id] = retry_resp.parsed
+                                    state.total_tokens += retry_resp.total_tokens
+                                    state.estimated_cost_usd += retry_resp.estimated_cost_usd
 
-                                critic_res = await asyncio.to_thread(engine.critic.evaluate_output, step=step, output=exec_res.parsed, task_objective=state.task, dependency_context=dep_context)
-                                latest_rev = critic_res.parsed
+                                # Re-audit
+                                critic_resp = await asyncio.to_thread(
+                                    engine.critic.evaluate_output,
+                                    step=step,
+                                    output=retry_resp.parsed,
+                                    task_objective=state.task,
+                                    dependency_context=dep_context,
+                                )
+                                latest_rev = critic_resp.parsed
                                 async with lock:
                                     state.critic_reviews[step.step_id].append(latest_rev)
-                                    state.total_tokens += critic_res.total_tokens
-                                    state.estimated_cost_usd += critic_res.estimated_cost_usd
+                                    state.total_tokens += critic_resp.total_tokens
+                                    state.estimated_cost_usd += critic_resp.estimated_cost_usd
                             else:
                                 break
 
@@ -238,7 +348,7 @@ async def run_workflow_stream(
                         })
                         return passed, step
 
-                    # Dispatch wave (concurrently if parallel mode, or sequentially)
+                    # Dispatch wave
                     if req.mode == "parallel":
                         results = await asyncio.gather(*(run_single_step(step) for step in batch))
                     else:
@@ -291,7 +401,22 @@ async def run_workflow_stream(
                             await queue.put(None)
                             return
 
-                # Workflow complete
+                # 4. Synthesis Phase
+                state.status = WorkflowStatus.SYNTHESIZING
+                await queue.put({"event": "status_change", "data": {"status": "SYNTHESIZING"}})
+                try:
+                    state = await asyncio.to_thread(engine.synthesizer.synthesize_workflow, state)
+                    await queue.put({
+                        "event": "synthesis_ready",
+                        "data": {
+                            "final_result": state.final_result,
+                            "sources": [s.model_dump() for s in state.sources],
+                        }
+                    })
+                except Exception as e:
+                    state.final_result = "\n\n".join(f"## {s.title}\n{s.output}" for s in state.step_outputs.values())
+
+                # 5. Workflow Complete
                 state.status = WorkflowStatus.COMPLETED
                 save_workflow_record(
                     workflow_id=state.workflow_id,
@@ -307,6 +432,8 @@ async def run_workflow_stream(
                     "data": {
                         "workflow_id": state.workflow_id,
                         "status": state.status.value,
+                        "final_result": state.final_result,
+                        "sources": [s.model_dump() for s in state.sources],
                         "total_tokens": state.total_tokens,
                         "estimated_cost_usd": state.estimated_cost_usd,
                         "steps": [s.model_dump() for s in state.plan.steps],
@@ -317,12 +444,10 @@ async def run_workflow_stream(
             except Exception as e:
                 await queue.put({"event": "error", "data": {"message": str(e)}})
             finally:
-                await queue.put(None)  # Sentinel to end stream
+                await queue.put(None)
 
-        # Start background execution
         task_coro = asyncio.create_task(worker())
 
-        # Yield events to SSE client
         while True:
             item = await queue.get()
             if item is None:
