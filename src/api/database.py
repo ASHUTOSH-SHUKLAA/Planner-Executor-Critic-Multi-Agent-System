@@ -58,6 +58,17 @@ def init_db():
     );
     """)
 
+    # 3. Passwordless OTP Verification Codes Table
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS verification_codes (
+        email TEXT PRIMARY KEY,
+        code TEXT NOT NULL,
+        expires_at TIMESTAMP NOT NULL,
+        attempts INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+
     conn.commit()
 
     # 3. Seed Default Admin User if no admin exists
@@ -118,6 +129,81 @@ def get_user_by_id(user_id: int) -> Optional[Dict[str, Any]]:
     if row:
         return dict(row)
     return None
+
+
+# Passwordless OTP Verification Operations
+def save_verification_code(email: str, code: str, expires_in_minutes: int = 10):
+    """Stores or updates a 6-digit verification code with a strict expiration window."""
+    from datetime import timedelta
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=expires_in_minutes)
+    cursor.execute("""
+        INSERT INTO verification_codes (email, code, expires_at, attempts, created_at)
+        VALUES (?, ?, ?, 0, CURRENT_TIMESTAMP)
+        ON CONFLICT(email) DO UPDATE SET
+            code = excluded.code,
+            expires_at = excluded.expires_at,
+            attempts = 0,
+            created_at = CURRENT_TIMESTAMP
+    """, (email.lower().strip(), code.strip(), expires_at.isoformat()))
+    conn.commit()
+    conn.close()
+
+
+def verify_code_match(email: str, input_code: str) -> tuple[bool, str]:
+    """
+    Validates the provided OTP code against the database:
+    - Verifies existence
+    - Enforces expiry window (10 mins)
+    - Enforces maximum failed attempts (rate limit to prevent brute force)
+    - Clears the code upon success to prevent replay attacks
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT code, expires_at, attempts FROM verification_codes WHERE email = ?",
+        (email.lower().strip(),),
+    )
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return False, "No active verification code found for this email. Please request a new code."
+
+    now = datetime.now(timezone.utc)
+    try:
+        expires_at = datetime.fromisoformat(row["expires_at"])
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+    except Exception:
+        expires_at = now
+
+    if now > expires_at:
+        cursor.execute("DELETE FROM verification_codes WHERE email = ?", (email.lower().strip(),))
+        conn.commit()
+        conn.close()
+        return False, "Verification code has expired. Please request a new code."
+
+    if row["attempts"] >= 5:
+        cursor.execute("DELETE FROM verification_codes WHERE email = ?", (email.lower().strip(),))
+        conn.commit()
+        conn.close()
+        return False, "Too many failed attempts. Security lock engaged. Please request a new code."
+
+    if row["code"].strip() != input_code.strip():
+        cursor.execute(
+            "UPDATE verification_codes SET attempts = attempts + 1 WHERE email = ?",
+            (email.lower().strip(),),
+        )
+        conn.commit()
+        conn.close()
+        return False, "Invalid verification code. Please check the code and try again."
+
+    # Successful match: delete the OTP to prevent replay
+    cursor.execute("DELETE FROM verification_codes WHERE email = ?", (email.lower().strip(),))
+    conn.commit()
+    conn.close()
+    return True, "Verification successful."
 
 
 # Workflow History & Ownership Operations

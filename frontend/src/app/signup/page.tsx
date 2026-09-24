@@ -6,24 +6,38 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/lib/toast-context";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { Bot, Lock, User, Mail, ArrowRight, AlertCircle } from "lucide-react";
+import { Bot, User, Mail, KeyRound, ArrowRight, ArrowLeft, AlertCircle, CheckCircle2, ShieldCheck } from "lucide-react";
 
 export default function SignupPage() {
   const router = useRouter();
-  const { register, isAuthenticated } = useAuth();
+  const { requestCode, verifyCode, isAuthenticated, isAdmin } = useAuth();
   const { success } = useToast();
 
+  const [step, setStep] = useState<"details" | "code">("details");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
+  const [devCode, setDevCode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [resendCountdown, setResendCountdown] = useState(0);
 
   useEffect(() => {
     if (isAuthenticated) {
-      router.push("/dashboard");
+      if (isAdmin) {
+        router.push("/admin");
+      } else {
+        router.push("/dashboard");
+      }
     }
-  }, [isAuthenticated, router]);
+  }, [isAuthenticated, isAdmin, router]);
+
+  useEffect(() => {
+    if (resendCountdown > 0) {
+      const timer = setTimeout(() => setResendCountdown(resendCountdown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [resendCountdown]);
 
   const DISPOSABLE_PATTERNS = [
     "tempmail", "10minute", "throwaway", "fakeinbox", "dispostable",
@@ -31,28 +45,58 @@ export default function SignupPage() {
     "dropmail", "fakeemail", "trash-mail", "getairmail", "sharklasers"
   ];
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSendCode = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    const domain = email.split("@")[1]?.toLowerCase().trim();
+    const cleanEmail = email.trim().toLowerCase();
+    const domain = cleanEmail.split("@")[1];
     if (!domain || !domain.includes(".")) {
       setError("Please enter a valid email address with a complete domain.");
       return;
     }
+
     if (DISPOSABLE_PATTERNS.some((p) => domain.includes(p))) {
-      setError("Registration with temporary or disposable email platforms is prohibited. Please provide an authentic email address (e.g. Gmail, Outlook, Yahoo, or your official organization domain).");
+      setError("Registration with temporary or disposable email platforms is prohibited. Please use an authentic email address (e.g. Gmail, Outlook, Yahoo, or your official organization domain).");
       return;
     }
 
     setIsLoading(true);
-
     try {
-      await register(name, email, password);
-      success("Account created successfully! Welcome to TriadFlow.", "Registered");
-      router.push("/dashboard");
+      const result = await requestCode(cleanEmail, name.trim());
+      setStep("code");
+      setResendCountdown(60);
+      if (result.dev_code) {
+        setDevCode(result.dev_code);
+      }
+      success("Verification code dispatched", "Check Inbox");
     } catch (err: any) {
-      setError(err.message || "Failed to create account. Please try again.");
+      setError(err.message || "Failed to dispatch verification code. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleVerifyCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    if (code.trim().length !== 6) {
+      setError("Please enter the complete 6-digit verification code.");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const auth = await verifyCode(email.trim().toLowerCase(), code.trim(), name.trim());
+      success(`Welcome to TriadFlow, ${auth.user.name}!`, "Account Created");
+      if (auth.user.role === "admin") {
+        router.push("/admin");
+      } else {
+        router.push("/dashboard");
+      }
+    } catch (err: any) {
+      setError(err.message || "Invalid or expired verification code.");
     } finally {
       setIsLoading(false);
     }
@@ -81,11 +125,17 @@ export default function SignupPage() {
       {/* Signup Card */}
       <div className="w-full max-w-md rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/95 dark:bg-zinc-950/80 p-8 shadow-xl dark:shadow-2xl backdrop-blur-xl relative z-10">
         <div className="text-center mb-6">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800 text-[11px] font-medium text-indigo-700 dark:text-indigo-300 mb-3">
+            <ShieldCheck className="h-3.5 w-3.5" />
+            Verified Email Onboarding
+          </div>
           <h1 className="text-2xl font-bold text-zinc-900 dark:text-white tracking-tight">
-            Create your account
+            {step === "details" ? "Create your account" : "Enter Verification Code"}
           </h1>
           <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
-            Start autonomous multi-agent research with verified sources
+            {step === "details"
+              ? "Sign up with your authentic email — no password memorization required"
+              : `Enter the 6-digit code sent to ${email}`}
           </p>
         </div>
 
@@ -96,88 +146,156 @@ export default function SignupPage() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
-              Full Name
-            </label>
-            <div className="relative">
-              <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400 dark:text-zinc-500" />
-              <input
-                type="text"
-                required
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Jane Doe"
-                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 py-2.5 pl-10 pr-4 text-sm text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-colors"
-              />
+        {step === "details" ? (
+          <form onSubmit={handleSendCode} className="space-y-4">
+            <div>
+              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
+                Full Name
+              </label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400 dark:text-zinc-500" />
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Jane Doe"
+                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 py-2.5 pl-10 pr-4 text-sm text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-colors"
+                />
+              </div>
             </div>
-          </div>
 
-          <div>
-            <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
-              Email address
-            </label>
-            <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400 dark:text-zinc-500" />
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="developer@example.com"
-                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 py-2.5 pl-10 pr-4 text-sm text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-colors"
-              />
+            <div>
+              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
+                Authentic Email Address
+              </label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400 dark:text-zinc-500" />
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@company.com or you@gmail.com"
+                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 py-2.5 pl-10 pr-4 text-sm text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-colors"
+                />
+              </div>
+              <p className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-1.5 leading-relaxed">
+                Authentic email required (Gmail, Outlook, Yahoo, or your official organization domain).
+              </p>
             </div>
-            <p className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-1">
-              Authentic email required (Gmail, Outlook, Yahoo, or your official organization domain).
-            </p>
-          </div>
 
-          <div>
-            <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
-              Password
-            </label>
-            <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400 dark:text-zinc-500" />
-              <input
-                type="password"
-                required
-                minLength={6}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 py-2.5 pl-10 pr-4 text-sm text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-colors"
-              />
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="w-full flex items-center justify-center gap-2 rounded-xl bg-indigo-600 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 hover:bg-indigo-500 transition-all disabled:opacity-50 mt-2 cursor-pointer"
-          >
-            {isLoading ? (
-              <span className="flex items-center gap-2">
-                <span className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-                <span>Creating Account...</span>
-              </span>
-            ) : (
-              <>
-                <span>Create Free Account</span>
-                <ArrowRight className="h-4 w-4" />
-              </>
+            <button
+              type="submit"
+              disabled={isLoading || !email.trim() || !name.trim()}
+              className="w-full flex items-center justify-center gap-2 rounded-xl bg-indigo-600 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 hover:bg-indigo-500 transition-all disabled:opacity-50 cursor-pointer"
+            >
+              {isLoading ? (
+                <span className="flex items-center gap-2">
+                  <span className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                  <span>Sending Code...</span>
+                </span>
+              ) : (
+                <>
+                  <span>Send Verification Code</span>
+                  <ArrowRight className="h-4 w-4" />
+                </>
+              )}
+            </button>
+          </form>
+        ) : (
+          <form onSubmit={handleVerifyCode} className="space-y-4">
+            {devCode && (
+              <div
+                onClick={() => setCode(devCode)}
+                className="cursor-pointer rounded-xl bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/60 p-3 text-xs text-indigo-700 dark:text-indigo-300 flex items-center justify-between hover:bg-indigo-100/80 transition-colors"
+                title="Click to auto-fill code"
+              >
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-indigo-500 flex-shrink-0" />
+                  <span>Test OTP: <strong className="font-mono tracking-widest text-sm">{devCode}</strong></span>
+                </div>
+                <span className="text-[10px] underline font-medium">Click to fill</span>
+              </div>
             )}
-          </button>
-        </form>
 
-        <div className="mt-6 pt-5 border-t border-zinc-200 dark:border-zinc-800/80 flex flex-col gap-2.5 text-center text-xs text-zinc-500 dark:text-zinc-400">
-          <div>
-            Already have an account?{" "}
-            <Link href="/login" className="text-indigo-600 dark:text-indigo-400 hover:underline font-medium">
-              Sign in
-            </Link>
-          </div>
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                  6-Digit Verification Code
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStep("details");
+                    setCode("");
+                    setDevCode(null);
+                    setError(null);
+                  }}
+                  className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline inline-flex items-center gap-1 cursor-pointer"
+                >
+                  <ArrowLeft className="h-3 w-3" /> Edit details
+                </button>
+              </div>
+              <div className="relative">
+                <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400 dark:text-zinc-500" />
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  maxLength={6}
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+                  placeholder="123456"
+                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 py-2.5 pl-10 pr-4 text-center font-mono text-lg tracking-[0.5em] text-zinc-900 dark:text-white placeholder-zinc-300 dark:placeholder-zinc-700 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-colors"
+                />
+              </div>
+              <p className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-1.5 text-center">
+                Code expires in 10 minutes. Max 5 verification attempts.
+              </p>
+            </div>
+
+            <button
+              type="submit"
+              disabled={isLoading || code.length !== 6}
+              className="w-full flex items-center justify-center gap-2 rounded-xl bg-indigo-600 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 hover:bg-indigo-500 transition-all disabled:opacity-50 cursor-pointer"
+            >
+              {isLoading ? (
+                <span className="flex items-center gap-2">
+                  <span className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                  <span>Verifying...</span>
+                </span>
+              ) : (
+                <>
+                  <span>Verify & Create Account</span>
+                  <ArrowRight className="h-4 w-4" />
+                </>
+              )}
+            </button>
+
+            <div className="text-center pt-2">
+              <button
+                type="button"
+                disabled={resendCountdown > 0 || isLoading}
+                onClick={handleSendCode}
+                className="text-xs text-zinc-500 dark:text-zinc-400 hover:text-indigo-600 dark:hover:text-indigo-400 disabled:opacity-50 cursor-pointer transition-colors"
+              >
+                {resendCountdown > 0 ? (
+                  <span>Resend code in {resendCountdown}s</span>
+                ) : (
+                  <span>Didn&apos;t receive code? Resend</span>
+                )}
+              </button>
+            </div>
+          </form>
+        )}
+
+        <div className="mt-6 pt-5 border-t border-zinc-200 dark:border-zinc-800/80 text-center text-xs text-zinc-500 dark:text-zinc-400">
+          Already have an account?{" "}
+          <Link href="/login" className="text-indigo-600 dark:text-indigo-400 hover:underline font-medium">
+            Sign in
+          </Link>
         </div>
       </div>
     </div>

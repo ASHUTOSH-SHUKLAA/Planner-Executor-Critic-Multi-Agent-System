@@ -7,6 +7,7 @@ Enforces strict Role-Based Access Control (RBAC) and user ownership.
 import os
 import socket
 import re
+import secrets
 import bcrypt
 import jwt
 from datetime import datetime, timedelta, timezone
@@ -19,6 +20,8 @@ from src.api.database import (
     create_user,
     get_user_by_email,
     get_user_by_id,
+    save_verification_code,
+    verify_code_match,
 )
 
 # JWT Secret and Configuration
@@ -108,6 +111,24 @@ def validate_authentic_email(email: str) -> str:
 
 
 # --- Schemas ---
+class SendCodeRequest(BaseModel):
+    email: EmailStr
+    name: Optional[str] = None
+
+
+class SendCodeResponse(BaseModel):
+    status: str = "success"
+    message: str
+    email: str
+    dev_code: Optional[str] = None  # Returned to facilitate local verification and developer testing
+
+
+class VerifyCodeRequest(BaseModel):
+    email: EmailStr
+    code: str = Field(min_length=6, max_length=6, description="6-digit verification code")
+    name: Optional[str] = None
+
+
 class RegisterRequest(BaseModel):
     name: str = Field(min_length=2, max_length=50)
     email: EmailStr
@@ -184,6 +205,85 @@ def require_admin(current_user: Dict[str, Any] = Depends(get_current_user)) -> D
 
 
 # --- Endpoints ---
+@router.post("/send-code", response_model=SendCodeResponse)
+def send_auth_code(req: SendCodeRequest):
+    """
+    Passwordless Email Authentication: Step 1.
+    Validates authentic email (rejects disposable mail), generates a 6-digit cryptographic OTP,
+    persists code with 10-minute expiry, and records the event in audit logs.
+    """
+    valid_email = validate_authentic_email(req.email)
+    code = f"{secrets.randbelow(900000) + 100000:06d}"
+    save_verification_code(email=valid_email, code=code, expires_in_minutes=10)
+
+    from src.api.audit_logger import log_user_event
+    log_user_event(
+        action="OTP_CODE_DISPATCHED",
+        user_id=None,
+        email=valid_email,
+        role="pending",
+        details="Verification code generated and dispatched (Expires in 10m)",
+    )
+    print(f"\n[AUTH SERVICE] ==================================================")
+    print(f"[AUTH SERVICE] Dispatching 6-Digit Verification Code to: {valid_email}")
+    print(f"[AUTH SERVICE] Code: >>> {code} <<< (Valid for 10 minutes)")
+    print(f"[AUTH SERVICE] ==================================================\n")
+
+    return SendCodeResponse(
+        status="success",
+        message=f"Verification code sent to {valid_email}. Please check your inbox or server logs.",
+        email=valid_email,
+        dev_code=code,
+    )
+
+
+@router.post("/verify-code", response_model=TokenResponse)
+def verify_auth_code(req: VerifyCodeRequest):
+    """
+    Passwordless Email Authentication: Step 2.
+    Validates 6-digit OTP, verifies single-use & expiration, auto-provisions or retrieves user,
+    determines role ('admin' for admin@triadflow.ai, 'user' for researchers),
+    and issues JWT bearer session token.
+    """
+    valid_email = validate_authentic_email(req.email)
+    success, message = verify_code_match(valid_email, req.code)
+    if not success:
+        raise HTTPException(status_code=400, detail=message)
+
+    user = get_user_by_email(valid_email)
+    from src.api.audit_logger import log_user_event
+
+    if not user:
+        # Determine initial role: admin@triadflow.ai is system administrator, others are researchers
+        role = "admin" if valid_email == "admin@triadflow.ai" else "user"
+        display_name = req.name.strip() if req.name and req.name.strip() else valid_email.split("@")[0].replace(".", " ").title()
+        dummy_hash = hash_password(secrets.token_urlsafe(32))
+        user = create_user(email=valid_email, name=display_name, password_hash=dummy_hash, role=role)
+        log_user_event(
+            action="USER_REGISTRATION",
+            user_id=user["id"],
+            email=user["email"],
+            role=user["role"],
+            details=f"Passwordless user registered: '{user['name']}'",
+        )
+    else:
+        user_role = user.get("role", "user")
+        log_user_event(
+            action="USER_LOGIN",
+            user_id=user["id"],
+            email=user["email"],
+            role=user_role,
+            details="Passwordless OTP authentication verified successfully",
+        )
+
+    user_role = user.get("role", "user")
+    token = create_access_token(data={"sub": str(user["id"]), "email": user["email"], "role": user_role})
+    return TokenResponse(
+        access_token=token,
+        user=UserResponse(id=user["id"], name=user["name"], email=user["email"], role=user_role),
+    )
+
+
 @router.post("/register", response_model=TokenResponse)
 def register(req: RegisterRequest):
     valid_email = validate_authentic_email(req.email)

@@ -133,6 +133,53 @@ export interface AdminWorkflow {
   created_at: string;
 }
 
+export interface SendCodeResult {
+  status: string;
+  message: string;
+  email: string;
+  dev_code?: string;
+}
+
+/**
+ * Passwordless Auth: Request a 6-digit verification OTP code
+ */
+export async function apiSendAuthCode(email: string, name?: string): Promise<SendCodeResult> {
+  const res = await fetch(`${API_BASE_URL}/api/auth/send-code`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: email.trim(), name: name?.trim() }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: "Failed to dispatch verification code" }));
+    throw new Error(err.detail || "Failed to dispatch verification code");
+  }
+
+  return res.json();
+}
+
+/**
+ * Passwordless Auth: Verify the 6-digit OTP code and establish authenticated session
+ */
+export async function apiVerifyAuthCode(email: string, code: string, name?: string): Promise<AuthResponse> {
+  const res = await fetch(`${API_BASE_URL}/api/auth/verify-code`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: email.trim(), code: code.trim(), name: name?.trim() }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: "Invalid or expired verification code" }));
+    throw new Error(err.detail || "Invalid or expired verification code");
+  }
+
+  const data: AuthResponse = await res.json();
+  if (data.user && !data.user.username) {
+    data.user.username = data.user.name;
+  }
+  return data;
+}
+
 /**
  * Register a new user
  */
@@ -286,6 +333,16 @@ export async function apiGetAdminWorkflows(token: string): Promise<AdminWorkflow
   });
   if (!res.ok) {
     throw new Error("Failed to fetch system workflows");
+  }
+  return res.json();
+}
+
+export async function apiGetAdminServerLogs(token: string): Promise<{ log_file: string; total_lines: number; content: string }> {
+  const res = await fetch(`${API_BASE_URL}/api/admin/server-logs`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    throw new Error("Failed to fetch server audit logs");
   }
   return res.json();
 }

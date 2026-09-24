@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { User, apiLogin, apiRegister, apiGetMe } from "./api";
+import { User, AuthResponse, SendCodeResult, apiLogin, apiRegister, apiGetMe, apiSendAuthCode, apiVerifyAuthCode } from "./api";
 
 interface AuthContextType {
   user: User | null;
@@ -9,6 +9,8 @@ interface AuthContextType {
   isLoading: boolean;
   isAuthenticated: boolean;
   isAdmin: boolean;
+  requestCode: (email: string, name?: string) => Promise<SendCodeResult>;
+  verifyCode: (email: string, code: string, name?: string) => Promise<AuthResponse>;
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => void;
@@ -46,6 +48,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const requestCode = async (email: string, name?: string) => {
+    return await apiSendAuthCode(email, name);
+  };
+
+  const verifyCode = async (email: string, code: string, name?: string) => {
+    const res = await apiVerifyAuthCode(email, code, name);
+    localStorage.setItem(TOKEN_KEY, res.access_token);
+    setToken(res.access_token);
+    setUser(res.user);
+    return res;
+  };
+
   const login = async (email: string, password: string) => {
     const res = await apiLogin(email, password);
     localStorage.setItem(TOKEN_KEY, res.access_token);
@@ -74,6 +88,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isLoading,
         isAuthenticated: !!user && !!token,
         isAdmin: user?.role === "admin",
+        requestCode,
+        verifyCode,
         login,
         register,
         logout,

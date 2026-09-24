@@ -1,114 +1,145 @@
-# TriadFlow: Autonomous Multi-Agent Orchestration & Self-Correction Engine
+# TriadFlow: Autonomous Multi-Agent Research System
 
-A production-grade, observable, and scalable multi-agent orchestration architecture designed to solve complex, multi-step goals using specialized **Planner**, **Wave Executor**, **Critic**, **Dynamic Re-planner**, and **Synthesizer** agents.
+> **A Production-Grade Planner–Executor–Critic Multi-Agent Platform**  
+> Powered by Google Gemini 2.5, Live Web Grounding (DuckDuckGo), Passwordless Email OTP Authentication, and an Enterprise Governance Architecture.
 
-Featuring a full-stack SaaS web application: a modern **Next.js 15** frontend with an interactive **React Flow DAG canvas**, real-time **Server-Sent Events (SSE)** streaming, **JWT authentication**, and a high-performance **FastAPI** backend powered by Groq LPUs.
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![Next.js 16](https://img.shields.io/badge/Next.js-16.3-black?logo=next.js&logoColor=white)](https://nextjs.org)
+[![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-blue?logo=python&logoColor=white)](https://python.org)
+[![Gemini](https://img.shields.io/badge/Google-Gemini_2.5-4285F4?logo=google&logoColor=white)](https://ai.google.dev)
+[![Tests Passing](https://img.shields.io/badge/Tests-39_Passed-brightgreen)](tests/)
 
 ---
 
-## 🎯 Architecture & Workflow
+## 📖 System Overview
+
+TriadFlow is an autonomous, observable, and resilient multi-agent research framework designed to synthesize deep research deliverables from natural language user objectives. It combines:
+
+1. **Planner Agent:** Decomposes complex research questions into structured Directed Acyclic Graphs (DAGs) with topological dependency ordering.
+2. **Executor Agent:** Concurrently executes plan steps with scoped ancestor context, querying real-time web search tools and extracting source evidence.
+3. **Critic Agent:** Conducts adversarial audits across numerical correctness, completeness, and relevance thresholds ($\ge 7/10$), detecting factual hallucinations and triggering bounded self-correction.
+4. **Synthesizer Agent:** Aggregates validated step deliverables and deduplicated citations into an executive markdown research report.
+5. **Role Governance:** Strict role segregation between **Researchers** (research execution, source citations) and **Administrators** (user registry, company workflows, token telemetry, security audit trail).
+6. **Passwordless OTP Authentication:** Eliminates password vulnerabilities via 6-digit cryptographic email verification codes and disposable email platform rejection.
+
+For full architectural blueprints, diagrams, and entry point mappings, see **[`ARCHITECTURE.md`](ARCHITECTURE.md)**.
+
+---
+
+## 🎯 Architecture Diagram
 
 ```mermaid
 flowchart TD
-    User([User Prompt / Goal]) --> API[FastAPI /api/workflows/run-stream]
-    API --> Planner[Planner Agent: GPT-OSS-120B]
-    Planner --> ValidateDAG{Topological DAG Validator}
-    ValidateDAG -- Valid Acyclic Graph --> WaveScheduler[Parallel Wave Scheduler]
-    
-    subgraph Parallel Wave Execution
-        WaveScheduler --> Batch[Batch Executable Steps]
+    User([Researcher Query]) --> API[FastAPI /api/workflows/run-stream]
+    API --> Planner[Planner Agent: DAG Decomposition]
+    Planner --> ValidateDAG{Topological DAG Validation}
+    ValidateDAG -- Valid Acyclic Graph --> WaveScheduler[Parallel Batch Scheduler]
+
+    subgraph Batch Execution & Evidence Grounding
+        WaveScheduler --> Batch[Batch Unblocked Steps]
         Batch --> Exec1[Worker 1: Step A]
         Batch --> Exec2[Worker 2: Step B]
-        Batch --> Exec3[Worker 3: Step C]
+        Exec1 & Exec2 --> SearchTool[DuckDuckGo Live Web Search]
+        SearchTool --> Evidence[Deduplicated Citations & Snippets]
     end
 
-    Exec1 & Exec2 & Exec3 --> Critic[Critic Agent: Threshold Gating]
-    
-    subgraph 2-Tier Self-Healing Recovery
-        Critic -- Reject: Correctness < 0.85 --> RetryCheck{Retry Count < 2?}
-        RetryCheck -- Yes --> TargetedFeedback[Targeted Feedback Retry]
+    Evidence --> Critic[Critic Agent: Threshold Gating]
+
+    subgraph 2-Tier Self-Healing Loop
+        Critic -- Reject: Score < 7 --> RetryCheck{Retry Count < 2?}
+        RetryCheck -- Yes --> TargetedFeedback[Targeted Critic Feedback Retry]
         TargetedFeedback --> Batch
         RetryCheck -- No --> ReplanCheck{Replans < 2?}
-        ReplanCheck -- Yes --> Replanner[Dynamic Re-planner]
+        ReplanCheck -- Yes --> Replanner[Dynamic DAG Re-planner]
         Replanner --> WaveScheduler
-        ReplanCheck -- No --> Fail([Workflow Terminated / Failed])
+        ReplanCheck -- No --> Fail([Workflow Terminated])
     end
 
-    Critic -- Pass: Score >= Thresholds --> NextWave{More Waves?}
+    Critic -- Pass: Score >= 7 --> NextWave{More Waves?}
     NextWave -- Yes --> WaveScheduler
     NextWave -- No --> Synthesizer[Synthesizer Agent]
-    
-    Synthesizer --> Report[Executive Markdown Report]
+
+    Synthesizer --> Report[Executive Markdown Report + Sources]
     Report --> Persist[(SQLite app.db)]
-    Persist --> UI([React Flow UI & Telemetry Canvas])
-```
-
-### Core Architectural Principles
-* **Plan Before Execution:** Decomposes ambiguous natural language into a Directed Acyclic Graph (DAG) with explicit dependencies and zero circular loops.
-* **Context Isolation:** The Wave Executor only receives deliverables from direct ancestors, preventing prompt pollution and token bloat.
-* **Deterministic Quality Gates:** The Critic audits every output against strict numerical thresholds (Correctness $\ge 0.85$, Completeness $\ge 0.80$, Relevance $\ge 0.85$) and detects genuine hallucinations.
-* **2-Tier Self-Correction:**
-  - *Tier 1:* Bounded retries with actionable Critic feedback.
-  - *Tier 2:* Autonomous Dynamic Re-planning when a step is unviable, with an infinite loop circuit breaker ($N \le 2$ replans).
-* **Parallel Wave Acceleration:** Executes unblocked steps concurrently via `asyncio.gather` and thread-isolated workers, achieving a **~2.1x wall-clock speedup**.
-* **Synthesized Executive Delivery:** Synthesizer agent merges all validated step deliverables into a cohesive technical report.
-* **Real-Time Observability:** Telemetry metrics (tokens, latency, USD cost) streamed via Server-Sent Events (SSE).
-
----
-
-## 💻 Tech Stack
-
-| Layer | Technologies |
-| :--- | :--- |
-| **Frontend** | Next.js 15 (Turbopack, App Router), React 19, TypeScript, Tailwind CSS v4, `@xyflow/react` (React Flow), Lucide Icons |
-| **Backend API** | FastAPI, Uvicorn, SSE-Starlette, SQLite, PyJWT, Passlib / Bcrypt |
-| **AI Agents** | Pydantic v2, Groq LPUs (`openai/gpt-oss-120b` for reasoning, `openai/gpt-oss-20b` for high-throughput waves) |
-| **Testing** | Pytest, Asyncio, Rich Telemetry |
-
----
-
-## 📁 Repository Structure
-
-```
-├── src/
-│   ├── agents/            # Specialized Agent Implementations
-│   │   ├── planner.py     # Module 3: Natural language to validated DAG
-│   │   ├── executor.py    # Module 4: Scoped dependency context executor
-│   │   ├── critic.py      # Module 5: Deterministic threshold auditor
-│   │   ├── replanner.py   # Module 7: Dynamic re-planning on repeated failure
-│   │   └── synthesizer.py # Module 10: Executive final report synthesizer
-│   ├── orchestrator/      # State machine & execution engines
-│   │   └── engine.py      # Modules 6 & 8: Sequential + Parallel Wave Engine
-│   ├── models/            # Module 1: Pydantic v2 Data Contracts
-│   │   └── schemas.py     # PlanStep, Plan (DAG validator), CriticReview, WorkflowState
-│   ├── llm/               # Module 2: Central LLM Gateway
-│   │   └── client.py      # Dynamic JSON schema enforcement, rate-limit backoff, pricing
-│   └── api/               # Phase A: FastAPI Backend
-│       ├── database.py    # SQLite database & migrations
-│       ├── auth.py        # JWT generation & password hashing
-│       ├── routes/        # Auth & Workflow streaming endpoints
-│       └── main.py        # CORS & FastAPI server entrypoint
-├── frontend/              # Phase B & C: Next.js 15 Full-Stack Web App
-│   ├── src/app/           # Landing page, /dashboard studio, /login, /signup
-│   ├── src/components/    # React Flow DAG canvas, custom nodes, inspector, telemetry
-│   └── src/lib/           # API client, auth context, SSE stream handler
-├── benchmarks/            # Module 9: 20-Task Benchmark Suite
-│   ├── tasks.json         # 20 diverse real-world industry tasks
-│   ├── run_benchmarks.py  # Automated benchmark runner
-│   └── results.md         # Generated empirical evaluation report
-├── tests/                 # Comprehensive unit test suite (33 tests)
-├── requirements.txt       # Python dependencies
-└── README.md
+    Persist --> UI([Next.js 16 Researcher Dashboard])
 ```
 
 ---
 
-## 🚀 Quick Start Guide
+## 🧭 System Entry Points
+
+| Layer | Entry File | Protocol / Port | Purpose |
+| :--- | :--- | :--- | :--- |
+| **Backend API** | [`src/api/main.py`](src/api/main.py) | HTTP / Port `8000` | FastAPI server bootstrap, CORS, router registration, OpenAPI/Swagger docs (`http://localhost:8000/docs`). |
+| **Frontend Web** | [`frontend/src/app/page.tsx`](frontend/src/app/page.tsx) | HTTP / Port `3000` | Next.js 16 landing page with feature cards, direct login/signup links. |
+| **Agent Triad Orchestrator** | [`src/orchestrator/engine.py`](src/orchestrator/engine.py) | Python Engine | Orchestrates Planner-Executor-Critic-Synthesizer state machine and self-correction. |
+| **Researcher Dashboard** | [`frontend/src/app/dashboard/page.tsx`](frontend/src/app/dashboard/page.tsx) | Browser View | Interactive research console with live SSE streaming, 4-stage stepper, and report download. |
+| **Admin Governance Console** | [`frontend/src/app/admin/page.tsx`](frontend/src/app/admin/page.tsx) | Browser View | Administrative dashboard for user management, system-wide workflows, and server audit logs. |
+
+---
+
+## 📁 Folder Structure
+
+```text
+OJTProject/
+├── ARCHITECTURE.md                  # Comprehensive architectural reference & design decisions
+├── README.md                        # Quick start guide and project overview
+├── app.db                           # SQLite persistent database (Users, Workflows, OTP Codes)
+├── logs/                            # Production server logs
+│   ├── user_activity.log            # Server security audit trail
+│   └── user_workflows.jsonl         # Structured JSONL telemetry logs
+│
+├── src/                             # Core Backend Source Code
+│   ├── agents/                      # Specialized Agent Implementations
+│   │   ├── planner.py               # Natural language goal to validated DAG
+│   │   ├── executor.py              # Scoped context execution & web search grounding
+│   │   ├── critic.py                # Adversarial evaluation & threshold gating
+│   │   └── synthesizer.py           # Final executive report synthesis & citations
+│   │
+│   ├── orchestrator/                # Multi-Agent State Machine
+│   │   └── engine.py                # Topological batch scheduler & recovery loops
+│   │
+│   ├── tools/                       # Grounding Tools
+│   │   └── search.py                # DuckDuckGo live search with URL deduplication
+│   │
+│   ├── llm/                         # LLM Gateway
+│   │   └── gateway.py               # Google Gemini (gemini-flash-lite-latest) with failover cascade
+│   │
+│   ├── models/                      # Pydantic v2 Data Contracts
+│   │   └── schemas.py               # WorkflowState, Plan, Step, CriticReview, Citations
+│   │
+│   └── api/                         # FastAPI Application & Services
+│       ├── main.py                  # API server entrypoint & CORS setup
+│       ├── auth.py                  # Passwordless email OTP authentication & RBAC guards
+│       ├── database.py              # SQLite data persistence & admin queries
+│       ├── audit_logger.py          # Security audit logger
+│       └── routes/                  # API Routers (/workflows, /admin)
+│
+├── frontend/                        # Next.js 16 Web Application
+│   ├── src/app/                     # Next.js App Router (/dashboard, /admin, /login, /signup)
+│   ├── src/components/              # UI components (Navbar, ThemeToggle, SettingsModal, Toast)
+│   └── src/lib/                     # API client, AuthContext, ToastContext
+│
+└── tests/                           # Complete Pytest Test Suite (39 Tests)
+    ├── test_api.py                  # API endpoints, OTP auth flow, RBAC, ownership checks
+    ├── test_planner.py              # DAG generation & dependency ordering
+    ├── test_executor.py             # Scoped dependency execution
+    ├── test_critic.py               # Critic thresholds & failure detection
+    ├── test_synthesizer.py          # Report synthesis & citations formatting
+    ├── test_parallel.py             # Topological batching & parallel execution speedup
+    ├── test_recovery.py             # Bounded retries & dynamic replanning
+    ├── test_schemas.py              # Pydantic models & graph validation
+    └── test_llm_gateway.py          # Token & cost calculation
+```
+
+---
+
+## ⚡ Quick Start Guide
 
 ### 1. Prerequisites
-* Python 3.11+
-* Node.js v18+ & npm
-* A Groq API Key ([console.groq.com](https://console.groq.com/keys))
+- Python 3.11+
+- Node.js v18+ & npm
+- Google Gemini API Key ([aistudio.google.com](https://aistudio.google.com))
 
 ### 2. Backend Setup
 ```bash
@@ -116,94 +147,50 @@ flowchart TD
 git clone https://github.com/ASHUTOSH-SHUKLAA/Planner-Executor-Critic-Multi-Agent-System.git
 cd Planner-Executor-Critic-Multi-Agent-System
 
-# Create and activate virtual environment
-python -m venv .venv
-# Windows:
-.\.venv\Scripts\Activate.ps1
-# Linux/macOS:
-source .venv/bin/activate
+# Activate Python virtual environment
+.\.venv\Scripts\Activate.ps1  # Windows PowerShell
+# source .venv/bin/activate    # Linux / macOS
 
-# Install Python requirements
+# Install dependencies
 pip install -r requirements.txt
 
-# Configure environment variables
-cp .env.example .env
-```
+# Configure environment variables in .env
+# GEMINI_API_KEY=your_gemini_api_key_here
+# JWT_SECRET=your_jwt_secret_key_here
 
-Ensure `.env` contains:
-```ini
-GROQ_API_KEY=gsk_your_groq_api_key_here
-DEFAULT_MODEL=openai/gpt-oss-120b
-FAST_MODEL=openai/gpt-oss-20b
-JWT_SECRET=your_jwt_secret_key_here
+# Launch FastAPI backend
+python -m uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
 ```
+API Documentation will be live at: `http://localhost:8000/docs`
 
-### 3. Launch Backend API Server
-```bash
-python -m uvicorn src.api.main:app --reload --port 8000
-```
-* Interactive Swagger Docs: `http://localhost:8000/docs`
-* SQLite Database: Automatically initialized at `app.db`
-
-### 4. Launch Frontend Web App
-In a new terminal:
+### 3. Frontend Setup
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
-* Open `http://localhost:3000` in your browser.
-* Browse the public landing page, sign up for a free account or continue as guest, and submit goals to the live React Flow DAG studio!
+Frontend web application will be live at: `http://localhost:3000`
 
 ---
 
-## 🧪 Testing & Verification
+## 🔒 Security & Role Model
 
-### Run Automated Unit Tests
+### Researcher (`user`) vs Admin (`admin`)
+- **Researcher:** Submits research queries, watches live multi-agent execution, reviews citations, and downloads reports.
+- **Admin:** Platform compliance and governance. Has full access to `/admin` to view registered users, company-wide research workflows, token costs, and persistent server audit logs (`logs/user_activity.log`).
+- **Research Execution Restriction:** To adhere to enterprise separation-of-concerns and prevent audit trail contamination, `POST /api/workflows/run-stream` strictly returns **403 Forbidden** if an administrator account attempts to execute research.
+
+### Passwordless Email OTP Authentication
+- **Step 1:** Enter authentic email address. Disposable and burner platforms (e.g. `tempmail`, `10minutemail`, `mailinator`) are rejected at the perimeter.
+- **Step 2:** System generates a 6-digit cryptographic numeric OTP with 10-minute expiry and rate-limiting lockout (max 5 attempts).
+- **Step 3:** User submits the code. Upon verification, the single-use code is deleted, the user is provisioned or retrieved, and a stateless JWT session token is returned.
+
+---
+
+## 🧪 Automated Testing
+
+Run the full pytest suite with:
 ```bash
-pytest -k "not test_live_"
+pytest tests/ -v
 ```
-Runs 29 unit tests in under 12 seconds with all external LLM calls mocked.
-
-### Run Empirical 20-Task Benchmark Suite
-```bash
-# Run benchmark on sample tasks
-python benchmarks/run_benchmarks.py --sample 2
-
-# Run full 20-task suite
-python benchmarks/run_benchmarks.py --mode parallel
-```
-Results, latency, token expenditures, and critic catch rates are automatically exported to `benchmarks/results.md`.
-
----
-
-## 📊 Benchmark Highlights
-
-| Metric | Target | TriadFlow Result |
-| :--- | :--- | :--- |
-| **Autonomous Success Rate** | $\ge 85.0\%$ | **100.0%** (Verified on Benchmark Suite) |
-| **Parallel Concurrency Speedup** | $\ge 1.5\times$ | **~2.1x** Wall-Clock Latency Reduction |
-| **Critic Mistake Catch Rate** | $\ge 90.0\%$ | **100%** Injected Flaws Caught & Recovered |
-| **DAG Cycle Validation Overhead**| $\le 0.1\text{s}$ | **< 0.02s** (Topological Pydantic Check) |
-| **Infinite Loop Breaker** | Strict Cap | Hard-capped at $\le 2$ dynamic re-plans |
-
----
-
-## 📜 Complete Module Delivery Status
-- [x] **Module 1: Data Contracts & Schemas** (`src/models/schemas.py`, `@model_validator` DAG checks)
-- [x] **Module 2: Central LLM Gateway** (`src/llm/client.py`, JSON schema enforcement, token & cost telemetry)
-- [x] **Module 3: The Planner Agent** (`src/agents/planner.py`, structured DAG decomposition)
-- [x] **Module 4: The Executor Agent** (`src/agents/executor.py`, scoped dependency context isolation)
-- [x] **Module 5: The Critic Agent** (`src/agents/critic.py`, multi-dimensional scoring & mistake detection)
-- [x] **Module 6: Sequential Orchestration Engine** (`src/orchestrator/engine.py`, lifecycle state machine)
-- [x] **Module 7: Dynamic Re-planner & Recovery Loop** (`src/agents/replanner.py`, bounded retry + loop breaker)
-- [x] **Module 8: Parallel Wave Execution Engine** (`src/orchestrator/engine.py`, concurrent wave batching)
-- [x] **Phase A: Backend API Layer** (`src/api/`, SQLite db, JWT authentication, SSE event streaming)
-- [x] **Phase B & C: Next.js Frontend Foundation & Studio** (`frontend/`, landing page, auth, React Flow DAG canvas)
-- [x] **Module 9: 20-Task Benchmark Suite** (`benchmarks/tasks.json`, runner, and `benchmarks/results.md`)
-- [x] **Module 10: Final Synthesizer Agent & Observability** (`src/agents/synthesizer.py`, full report synthesis)
-
----
-
-## 🛡️ License
-MIT License. Created by [Ashutosh Shukla](https://github.com/ASHUTOSH-SHUKLAA).
+All 39 unit and integration tests run deterministically against local mock fixtures and SQLite persistence with 100% pass rate.

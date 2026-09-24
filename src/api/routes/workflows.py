@@ -175,7 +175,15 @@ async def run_workflow_stream(
     """
     Executes an autonomous research workflow and streams real-time Server-Sent Events (SSE).
     Guaranteed JWT authentication, live tool execution, citations capture, and synthesis delivery.
+    Enforces strict role separation: Research execution is strictly reserved for Researcher users.
     """
+    # Enforce role segregation: Admins govern the system, researchers execute workflows
+    if current_user.get("role") == "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: Research execution is reserved strictly for Researcher accounts. Administrators govern the platform, monitor audit logs, manage users, and inspect system telemetry.",
+        )
+
     user_id = current_user["id"]
 
     async def event_generator():

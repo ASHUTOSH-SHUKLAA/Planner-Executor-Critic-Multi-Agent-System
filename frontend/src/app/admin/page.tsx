@@ -12,6 +12,7 @@ import {
   apiGetAdminStats,
   apiGetAdminUsers,
   apiGetAdminWorkflows,
+  apiGetAdminServerLogs,
   apiDownloadWorkflow,
 } from "@/lib/api";
 import {
@@ -24,9 +25,9 @@ import {
   XCircle,
   Clock,
   RefreshCw,
-  Download,
   FileText,
   UserCheck,
+  Terminal,
 } from "lucide-react";
 
 export default function AdminPage() {
@@ -37,8 +38,9 @@ export default function AdminPage() {
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [workflows, setWorkflows] = useState<AdminWorkflow[]>([]);
+  const [serverLogs, setServerLogs] = useState<string>("");
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"overview" | "users" | "workflows">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "users" | "logs">("overview");
 
   useEffect(() => {
     if (!authLoading) {
@@ -55,14 +57,16 @@ export default function AdminPage() {
     if (!token) return;
     setLoading(true);
     try {
-      const [s, u, w] = await Promise.all([
+      const [s, u, w, l] = await Promise.all([
         apiGetAdminStats(token),
         apiGetAdminUsers(token),
         apiGetAdminWorkflows(token),
+        apiGetAdminServerLogs(token).catch(() => ({ log_file: "logs/user_activity.log", total_lines: 0, content: "No server logs found." })),
       ]);
       setStats(s);
       setUsers(u);
       setWorkflows(w);
+      setServerLogs(l.content);
     } catch (err: any) {
       error(err.message || "Failed to load admin data", "Error");
     } finally {
@@ -118,11 +122,11 @@ export default function AdminPage() {
                 Platform Administration
               </h1>
               <span className="rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 text-[10px] font-bold px-2 py-0.5">
-                SYSTEM AUDIT
+                GOVERNANCE & AUDIT
               </span>
             </div>
             <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
-              Live system analytics, user registration registry, and multi-agent workflow execution logs.
+              Live system analytics, user registration registry, multi-agent workflows, and persistent server audit logs.
             </p>
           </div>
 
@@ -213,6 +217,17 @@ export default function AdminPage() {
           >
             Registered Users ({users.length})
           </button>
+          <button
+            onClick={() => setActiveTab("logs")}
+            className={`pb-2.5 px-3 text-xs font-semibold border-b-2 transition-colors cursor-pointer flex items-center gap-1.5 ${
+              activeTab === "logs"
+                ? "border-indigo-600 text-indigo-600 dark:text-indigo-400"
+                : "border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+            }`}
+          >
+            <Terminal className="h-3.5 w-3.5" />
+            <span>Server Audit Trail</span>
+          </button>
         </div>
 
         {/* Tab Content */}
@@ -237,66 +252,74 @@ export default function AdminPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800/80">
-                  {workflows.map((wf) => (
-                    <tr
-                      key={wf.workflow_id}
-                      className="hover:bg-zinc-50/50 dark:hover:bg-zinc-900/30 transition-colors"
-                    >
-                      <td className="py-4 px-4 sm:px-6 max-w-xs font-medium text-zinc-900 dark:text-white">
-                        <div className="line-clamp-2">{wf.task}</div>
-                        <div className="text-[10px] text-zinc-400 font-mono mt-0.5">
-                          {wf.workflow_id}
-                        </div>
-                      </td>
-                      <td className="py-4 px-4 whitespace-nowrap">
-                        <div className="font-medium text-zinc-800 dark:text-zinc-200">{wf.user_name}</div>
-                        <div className="text-[10px] text-zinc-400">{wf.user_email}</div>
-                      </td>
-                      <td className="py-4 px-4 whitespace-nowrap">
-                        {wf.status === "COMPLETED" ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold">
-                            <CheckCircle2 className="h-3 w-3" />
-                            <span>COMPLETED</span>
-                          </span>
-                        ) : wf.status === "FAILED" ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 px-2 py-0.5 text-[10px] font-semibold">
-                            <XCircle className="h-3 w-3" />
-                            <span>FAILED</span>
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 px-2 py-0.5 text-[10px] font-semibold">
-                            <Clock className="h-3 w-3 animate-spin" />
-                            <span>{wf.status}</span>
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-4 px-4 whitespace-nowrap font-mono">
-                        {wf.total_tokens.toLocaleString()}
-                      </td>
-                      <td className="py-4 px-4 whitespace-nowrap font-mono">
-                        ${wf.estimated_cost_usd.toFixed(4)}
-                      </td>
-                      <td className="py-4 px-4 whitespace-nowrap text-zinc-500">
-                        {wf.created_at}
-                      </td>
-                      <td className="py-4 px-4 sm:px-6 whitespace-nowrap text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <button
-                            onClick={() => handleDownload(wf.workflow_id, "md")}
-                            className="p-1.5 rounded-lg text-zinc-500 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-                            title="Download Report"
-                          >
-                            <FileText className="h-4 w-4" />
-                          </button>
-                        </div>
+                  {workflows.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-8 text-center text-zinc-500">
+                        No research workflows recorded yet.
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    workflows.map((wf) => (
+                      <tr
+                        key={wf.workflow_id}
+                        className="hover:bg-zinc-50/50 dark:hover:bg-zinc-900/30 transition-colors"
+                      >
+                        <td className="py-4 px-4 sm:px-6 max-w-xs font-medium text-zinc-900 dark:text-white">
+                          <div className="line-clamp-2">{wf.task}</div>
+                          <div className="text-[10px] text-zinc-400 font-mono mt-0.5">
+                            {wf.workflow_id}
+                          </div>
+                        </td>
+                        <td className="py-4 px-4 whitespace-nowrap">
+                          <div className="font-medium text-zinc-800 dark:text-zinc-200">{wf.user_name}</div>
+                          <div className="text-[10px] text-zinc-400">{wf.user_email}</div>
+                        </td>
+                        <td className="py-4 px-4 whitespace-nowrap">
+                          {wf.status === "COMPLETED" ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold">
+                              <CheckCircle2 className="h-3 w-3" />
+                              <span>COMPLETED</span>
+                            </span>
+                          ) : wf.status === "FAILED" ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 px-2 py-0.5 text-[10px] font-semibold">
+                              <XCircle className="h-3 w-3" />
+                              <span>FAILED</span>
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 px-2 py-0.5 text-[10px] font-semibold">
+                              <Clock className="h-3 w-3 animate-spin" />
+                              <span>{wf.status}</span>
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-4 px-4 whitespace-nowrap font-mono">
+                          {wf.total_tokens.toLocaleString()}
+                        </td>
+                        <td className="py-4 px-4 whitespace-nowrap font-mono">
+                          ${wf.estimated_cost_usd.toFixed(4)}
+                        </td>
+                        <td className="py-4 px-4 whitespace-nowrap text-zinc-500">
+                          {wf.created_at}
+                        </td>
+                        <td className="py-4 px-4 sm:px-6 whitespace-nowrap text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              onClick={() => handleDownload(wf.workflow_id, "md")}
+                              className="p-1.5 rounded-lg text-zinc-500 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+                              title="Download Report"
+                            >
+                              <FileText className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
           </div>
-        ) : (
+        ) : activeTab === "users" ? (
           <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 overflow-hidden shadow-xs">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs text-zinc-600 dark:text-zinc-400">
@@ -323,11 +346,11 @@ export default function AdminPage() {
                       <td className="py-4 px-4">
                         {u.role === "admin" ? (
                           <span className="rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 text-[10px] font-bold px-2 py-0.5 uppercase tracking-wide">
-                            Admin
+                            Admin (Governance)
                           </span>
                         ) : (
                           <span className="rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 text-[10px] font-semibold px-2 py-0.5 uppercase">
-                            User
+                            Researcher
                           </span>
                         )}
                       </td>
@@ -340,6 +363,23 @@ export default function AdminPage() {
                 </tbody>
               </table>
             </div>
+          </div>
+        ) : (
+          /* Logs Tab */
+          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-950 text-zinc-100 p-5 font-mono text-xs shadow-xl">
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-3 mb-4">
+              <div className="flex items-center gap-2 text-zinc-400">
+                <Terminal className="h-4 w-4 text-emerald-400" />
+                <span className="font-semibold text-zinc-200">Server Audit Log Stream</span>
+                <span className="text-[10px] text-zinc-500 bg-zinc-900 px-2 py-0.5 rounded border border-zinc-800">
+                  logs/user_activity.log
+                </span>
+              </div>
+              <span className="text-[10px] text-zinc-500">Live Server Records</span>
+            </div>
+            <pre className="overflow-x-auto whitespace-pre-wrap max-h-[500px] overflow-y-auto leading-relaxed text-zinc-300 select-text font-mono text-[11px]">
+              {serverLogs || "No server logs recorded yet."}
+            </pre>
           </div>
         )}
       </main>

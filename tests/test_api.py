@@ -301,3 +301,72 @@ def test_workflow_request_accepts_both_task_and_goal():
     req3 = RunWorkflowRequest(task="Task text", goal="Goal text", mode="sequential")
     assert req3.task == "Task text"
 
+
+def test_passwordless_otp_auth_flow():
+    """Verify passwordless email OTP generation, validation, auto-provisioning, and single-use."""
+    import uuid
+    test_email = f"researcher_{uuid.uuid4().hex[:6]}@example.com"
+
+    # 1. Request verification code
+    send_resp = client.post("/api/auth/send-code", json={"email": test_email, "name": "Dr. Marie Curie"})
+    assert send_resp.status_code == 200
+    send_data = send_resp.json()
+    assert send_data["status"] == "success"
+    assert "dev_code" in send_data
+    otp_code = send_data["dev_code"]
+    assert len(otp_code) == 6
+
+    # 2. Reject incorrect verification code
+    bad_verify = client.post(
+        "/api/auth/verify-code",
+        json={"email": test_email, "code": "000000", "name": "Dr. Marie Curie"},
+    )
+    assert bad_verify.status_code == 400
+    assert "Invalid verification code" in bad_verify.json()["detail"]
+
+    # 3. Successful verification
+    good_verify = client.post(
+        "/api/auth/verify-code",
+        json={"email": test_email, "code": otp_code, "name": "Dr. Marie Curie"},
+    )
+    assert good_verify.status_code == 200
+    verify_data = good_verify.json()
+    assert "access_token" in verify_data
+    assert verify_data["user"]["email"] == test_email
+    assert verify_data["user"]["role"] == "user"
+    token = verify_data["access_token"]
+
+    # 4. Code cannot be reused (replay prevention)
+    replay_verify = client.post(
+        "/api/auth/verify-code",
+        json={"email": test_email, "code": otp_code},
+    )
+    assert replay_verify.status_code == 400
+
+    # 5. Token is valid and can access /me
+    me_resp = client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
+    assert me_resp.status_code == 200
+    assert me_resp.json()["email"] == test_email
+
+
+def test_admin_cannot_execute_research_workflow():
+    """Verify that administrators are forbidden from executing research tasks (role separation)."""
+    # 1. Admin login
+    admin_login = client.post(
+        "/api/auth/login",
+        json={"email": "admin@triadflow.ai", "password": "AdminPass123!"},
+    )
+    assert admin_login.status_code == 200
+    admin_token = admin_login.json()["access_token"]
+    assert admin_login.json()["user"]["role"] == "admin"
+
+    # 2. Admin attempts to run research workflow -> 403 Forbidden
+    resp = client.post(
+        "/api/workflows/run-stream",
+        json={"task": "Research EV market share in India", "mode": "parallel"},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert resp.status_code == 403
+    assert "reserved strictly for Researcher" in resp.json()["detail"]
+
+

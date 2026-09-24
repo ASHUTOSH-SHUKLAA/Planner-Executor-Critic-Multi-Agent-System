@@ -32,7 +32,7 @@ import {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { token, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { user, token, isAuthenticated, isAdmin, isLoading: authLoading } = useAuth();
   const { success, error, info } = useToast();
 
   const [goal, setGoal] = useState("");
@@ -77,6 +77,10 @@ export default function DashboardPage() {
 
   const handleRun = async () => {
     if (!goal.trim() || isRunning) return;
+    if (isAdmin) {
+      error("Research execution is reserved for Researcher (User) accounts. Platform administrators govern the system from the Admin Console.", "Admin Restricted");
+      return;
+    }
     if (!token) {
       error("Authentication required. Please sign in.", "Auth Required");
       router.push("/login");
@@ -275,6 +279,29 @@ export default function DashboardPage() {
       <Navbar />
 
       <main className="flex-1 flex flex-col max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 gap-6">
+        {/* Administrator Governance Mode Notification */}
+        {isAdmin && (
+          <div className="rounded-2xl border border-amber-300 dark:border-amber-700/60 bg-amber-50/90 dark:bg-amber-950/30 p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <ShieldCheck className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+              <div>
+                <div className="text-xs font-bold text-amber-900 dark:text-amber-200">
+                  Administrator Governance Mode Active
+                </div>
+                <div className="text-[11px] text-amber-700 dark:text-amber-400 mt-0.5 leading-relaxed">
+                  Research workflow execution is reserved strictly for Researcher (User) accounts. As an Administrator, your role is platform governance, user management, token expenditure analytics, and server security audit log monitoring.
+                </div>
+              </div>
+            </div>
+            <Link
+              href="/admin"
+              className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold shadow-xs transition-colors shrink-0"
+            >
+              Open Admin Console
+            </Link>
+          </div>
+        )}
+
         {/* Research Input & Configuration Card */}
         <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/95 dark:bg-zinc-950/80 p-5 sm:p-6 shadow-xl dark:shadow-2xl backdrop-blur-md transition-colors">
           <div className="flex flex-col gap-4">
@@ -284,16 +311,25 @@ export default function DashboardPage() {
                   <Sparkles className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
                   <span>Research Objective & Query</span>
                 </label>
+                {isAdmin && (
+                  <span className="text-[10px] font-medium text-amber-600 dark:text-amber-400 bg-amber-100/70 dark:bg-amber-950/50 px-2 py-0.5 rounded-full border border-amber-300 dark:border-amber-800">
+                    Admin: Governance Only
+                  </span>
+                )}
               </div>
 
               <textarea
                 rows={3}
                 value={goal}
-                disabled={isRunning}
+                disabled={isRunning || isAdmin}
                 onChange={(e) => setGoal(e.target.value)}
-                placeholder="e.g. Conduct a research in the automobile industry and list out the best car model under 10 lakh in EV vs Diesel."
+                placeholder={
+                  isAdmin
+                    ? "Research execution is reserved for Researcher accounts. Please use the Admin Console for platform governance."
+                    : "e.g. Conduct a research in the automobile industry and list out the best car model under 10 lakh in EV vs Diesel."
+                }
                 className={`w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-900/60 p-3.5 text-sm text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-colors font-sans ${
-                  isRunning ? "opacity-60 cursor-not-allowed" : ""
+                  isRunning || isAdmin ? "opacity-60 cursor-not-allowed" : ""
                 }`}
               />
             </div>
@@ -302,10 +338,12 @@ export default function DashboardPage() {
             <div className="flex items-center justify-end pt-3 border-t border-zinc-100 dark:border-zinc-800/80">
               <button
                 onClick={handleRun}
-                disabled={isRunning || !goal.trim()}
+                disabled={isRunning || !goal.trim() || isAdmin}
                 className={`flex items-center gap-2 rounded-xl px-6 py-2.5 text-xs font-bold text-white shadow-lg transition-all ${
                   isRunning
                     ? "bg-indigo-600/70 cursor-not-allowed opacity-90 shadow-none ring-2 ring-indigo-500/30"
+                    : isAdmin
+                    ? "bg-zinc-400 dark:bg-zinc-700 cursor-not-allowed opacity-60 shadow-none"
                     : "bg-indigo-600 hover:bg-indigo-500 shadow-indigo-500/25 hover:scale-[1.02] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 }`}
               >
@@ -313,6 +351,11 @@ export default function DashboardPage() {
                   <>
                     <div className="h-3.5 w-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                     <span>Researching & Grounding Results...</span>
+                  </>
+                ) : isAdmin ? (
+                  <>
+                    <ShieldCheck className="h-3.5 w-3.5" />
+                    <span>Admin Mode (Governance Only)</span>
                   </>
                 ) : (
                   <>
