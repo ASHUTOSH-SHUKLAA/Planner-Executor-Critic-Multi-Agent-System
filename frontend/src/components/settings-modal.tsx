@@ -157,8 +157,8 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 p-3.5 text-xs">
             <div className="flex items-center justify-between mb-2">
               <span className="font-semibold flex items-center gap-1.5">
-                <Cpu className="h-3.5 w-3.5 text-sky-500" />
-                <span>Active Groq Models</span>
+                <Cpu className="h-3.5 w-3.5 text-indigo-500" />
+                <span>Active Google Gemini Engine</span>
               </span>
               <span className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
                 <span className="h-2 w-2 rounded-full bg-emerald-500" />
@@ -167,12 +167,16 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             </div>
             <div className="space-y-1.5 text-zinc-600 dark:text-zinc-400 font-mono text-[11px]">
               <div className="flex justify-between">
-                <span>Planner / Re-planner:</span>
-                <strong className="text-zinc-900 dark:text-zinc-200">openai/gpt-oss-120b</strong>
+                <span>Primary Agent Model:</span>
+                <strong className="text-zinc-900 dark:text-zinc-200">gemini-flash-lite-latest</strong>
               </div>
               <div className="flex justify-between">
-                <span>Wave Executor & Critic:</span>
-                <strong className="text-zinc-900 dark:text-zinc-200">openai/gpt-oss-20b</strong>
+                <span>Failover Cascade:</span>
+                <strong className="text-zinc-900 dark:text-zinc-200">gemini-3.5-flash-lite / 3.6-flash</strong>
+              </div>
+              <div className="flex justify-between">
+                <span>Live Grounding Tool:</span>
+                <strong className="text-zinc-900 dark:text-zinc-200">DuckDuckGo Web Search</strong>
               </div>
             </div>
           </div>

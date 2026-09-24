@@ -25,7 +25,6 @@ import {
   Sparkles,
   ArrowRight,
   Layers,
-  ListOrdered,
   AlertCircle,
   Download,
   FileText,
@@ -39,7 +38,6 @@ import {
   ExternalLink,
   BookOpen,
   Clock,
-  History,
 } from "lucide-react";
 
 export default function DashboardPage() {
@@ -313,18 +311,6 @@ export default function DashboardPage() {
                   <Sparkles className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
                   <span>Research Objective & Query</span>
                 </label>
-                <div className="flex items-center gap-3">
-                  <span className="text-[11px] text-zinc-400 hidden sm:inline">
-                    Press <kbd className="px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-[10px] font-mono">Ctrl+Enter</kbd> to execute
-                  </span>
-                  <Link
-                    href="/history"
-                    className="flex items-center gap-1 text-[11px] text-zinc-600 dark:text-zinc-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
-                  >
-                    <History className="h-3.5 w-3.5" />
-                    <span>View History</span>
-                  </Link>
-                </div>
               </div>
 
               <textarea
@@ -337,37 +323,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Execution Controls */}
-            <div className="flex flex-wrap items-center justify-between gap-4 pt-3 border-t border-zinc-100 dark:border-zinc-800/80">
-              <div className="flex items-center gap-3">
-                <span className="text-xs text-zinc-500 dark:text-zinc-400 font-medium">
-                  Dispatch Mode:
-                </span>
-                <div className="inline-flex rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900/60 p-1">
-                  <button
-                    onClick={() => setMode("parallel")}
-                    className={`flex items-center gap-1.5 rounded-lg px-3 py-1 text-xs font-semibold transition-colors cursor-pointer ${
-                      mode === "parallel"
-                        ? "bg-indigo-600 text-white shadow-xs"
-                        : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-zinc-200"
-                    }`}
-                  >
-                    <Layers className="h-3.5 w-3.5" />
-                    <span>Parallel Waves</span>
-                  </button>
-                  <button
-                    onClick={() => setMode("sequential")}
-                    className={`flex items-center gap-1.5 rounded-lg px-3 py-1 text-xs font-semibold transition-colors cursor-pointer ${
-                      mode === "sequential"
-                        ? "bg-indigo-600 text-white shadow-xs"
-                        : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-zinc-200"
-                    }`}
-                  >
-                    <ListOrdered className="h-3.5 w-3.5" />
-                    <span>Sequential</span>
-                  </button>
-                </div>
-              </div>
-
+            <div className="flex items-center justify-end pt-3 border-t border-zinc-100 dark:border-zinc-800/80">
               {/* Action Buttons */}
               <div className="flex items-center gap-3">
                 {isRunning ? (

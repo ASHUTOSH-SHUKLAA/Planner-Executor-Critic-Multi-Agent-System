@@ -95,6 +95,44 @@ def test_auth_registration_and_login_flow():
     assert me_response.json()["email"] == test_email
 
 
+def test_email_authenticity_verification():
+    """Verify that registration rejects disposable/fake email platforms and accepts authentic ones."""
+    # 1. Reject disposable temporary mail
+    disposable_resp = client.post(
+        "/api/auth/register",
+        json={
+            "name": "Disposable User",
+            "email": "tester@mailinator.com",
+            "password": "Password123!",
+        },
+    )
+    assert disposable_resp.status_code == 400
+    assert "temporary or disposable" in disposable_resp.json()["detail"].lower()
+
+    # 2. Reject non-existent/unverifiable domain
+    fake_domain_resp = client.post(
+        "/api/auth/register",
+        json={
+            "name": "Fake Domain User",
+            "email": "tester@unverifiable-domain-xyz-987654321.org",
+            "password": "Password123!",
+        },
+    )
+    assert fake_domain_resp.status_code == 400
+
+    # 3. Accept authentic provider (e.g. gmail.com)
+    gmail_resp = client.post(
+        "/api/auth/register",
+        json={
+            "name": "Authentic Gmail User",
+            "email": f"authentic_tester_{pytest.importorskip('uuid').uuid4().hex[:6]}@gmail.com",
+            "password": "Password123!",
+        },
+    )
+    assert gmail_resp.status_code == 200
+    assert "access_token" in gmail_resp.json()
+
+
 def test_workflows_list_endpoint_auth_enforcement():
     """Verify workflow listing requires authentication (401 without token, 200 with token)."""
     # 1. Unauthenticated request should fail with 401

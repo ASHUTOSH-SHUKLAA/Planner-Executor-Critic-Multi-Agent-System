@@ -464,14 +464,6 @@ export default function LandingPage() {
             <span>TriadFlow Multi-Agent Research Platform • 2026</span>
           </div>
           <div className="flex items-center gap-6">
-            <Link
-              href="https://github.com/ASHUTOSH-SHUKLAA/Planner-Executor-Critic-Multi-Agent-System"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:text-zinc-800 dark:hover:text-zinc-300 transition-colors"
-            >
-              GitHub Source Code
-            </Link>
             <Link href="/dashboard" className="hover:text-zinc-800 dark:hover:text-zinc-300 transition-colors">
               Workspace
             </Link>

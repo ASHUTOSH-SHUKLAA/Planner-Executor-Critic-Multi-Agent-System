@@ -5,6 +5,8 @@ Enforces strict Role-Based Access Control (RBAC) and user ownership.
 """
 
 import os
+import socket
+import re
 import bcrypt
 import jwt
 from datetime import datetime, timedelta, timezone
@@ -27,6 +29,82 @@ ACCESS_TOKEN_EXPIRE_HOURS = 24 * 7  # 7-day token
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token")
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
+
+
+# --- Email Authenticity Verification Guard ---
+DISPOSABLE_MAIL_DOMAINS = {
+    "mailinator.com", "tempmail.com", "temp-mail.org", "10minutemail.com",
+    "guerrillamail.com", "guerrillamail.net", "guerrillamail.biz",
+    "yopmail.com", "yopmail.fr", "yopmail.net",
+    "trashmail.com", "trashmail.net", "trashmail.me", "trashmail.org",
+    "sharklasers.com", "dispostable.com", "getairmail.com",
+    "burnermail.io", "throwawaymail.com", "fakeinbox.com",
+    "maildrop.cc", "crazymailing.com", "mohmal.com", "mytemp.email",
+    "minuteinbox.com", "inboxbear.com", "inboxkitten.com",
+    "emailondeck.com", "nada.ltd", "getnada.com", "fakemailgenerator.com",
+    "tempinbox.com", "discard.email", "generator.email",
+    "dropmail.me", "mailnesia.com", "mailcatch.com", "meltmail.com",
+    "tmail.ws", "luxusmail.org", "temp-mail.io", "tempmail.net",
+    "10minutemail.net", "fakemail.net", "burnermail.com", "temporarymail.com",
+}
+
+DISPOSABLE_KEYWORDS = (
+    "tempmail", "10minute", "throwaway", "fakeinbox", "dispostable",
+    "burnermail", "guerrillamail", "mailinator", "yopmail", "trashmail",
+    "dropmail", "fakeemail", "trash-mail"
+)
+
+TRUSTED_AUTHENTIC_DOMAINS = {
+    "gmail.com", "googlemail.com", "outlook.com", "hotmail.com", "live.com",
+    "msn.com", "yahoo.com", "yahoo.co.in", "yahoo.co.uk", "yahoo.fr",
+    "icloud.com", "me.com", "mac.com", "proton.me", "protonmail.com",
+    "zoho.com", "zohomail.in", "aol.com", "fastmail.com", "gmx.com",
+    "mail.com", "yandex.com", "tutanota.com", "tutamail.com", "hey.com",
+    "example.com", "example.org", "example.net", "triadflow.ai", "localhost",
+}
+
+
+def validate_authentic_email(email: str) -> str:
+    """
+    Verifies that the provided email address is authentic:
+    1. Valid structural formatting and TLD.
+    2. Rejects disposable / burner / temporary mail platforms.
+    3. Verifies that the domain belongs to a recognized authentic mail provider
+       or resolves to an active, reachable host via DNS.
+    """
+    cleaned = email.strip().lower()
+    if "@" not in cleaned:
+        raise HTTPException(status_code=400, detail="Invalid email format.")
+
+    local_part, domain = cleaned.rsplit("@", 1)
+    if not local_part or not domain or "." not in domain:
+        raise HTTPException(status_code=400, detail="Invalid email format: incomplete domain.")
+
+    tld = domain.split(".")[-1]
+    if len(tld) < 2 or not tld.isalpha():
+        raise HTTPException(status_code=400, detail="Invalid email format: invalid top-level domain.")
+
+    # Check against known disposable platforms and keywords
+    if domain in DISPOSABLE_MAIL_DOMAINS or any(kw in domain for kw in DISPOSABLE_KEYWORDS):
+        raise HTTPException(
+            status_code=400,
+            detail="Registration with temporary or disposable email platforms is prohibited. Please use an authentic email address (e.g. Gmail, Outlook, Yahoo, or your official organization domain).",
+        )
+
+    # Trusted public and test domains
+    if domain in TRUSTED_AUTHENTIC_DOMAINS:
+        return cleaned
+
+    # For custom / enterprise / university domains, verify DNS reachability
+    try:
+        socket.getaddrinfo(domain, 80, socket.AF_UNSPEC, socket.SOCK_STREAM)
+    except (socket.gaierror, socket.herror, TimeoutError, OSError):
+        raise HTTPException(
+            status_code=400,
+            detail=f"The domain '@{domain}' could not be verified on the internet. Please provide an authentic, active email address.",
+        )
+
+    return cleaned
 
 
 # --- Schemas ---
@@ -108,12 +186,13 @@ def require_admin(current_user: Dict[str, Any] = Depends(get_current_user)) -> D
 # --- Endpoints ---
 @router.post("/register", response_model=TokenResponse)
 def register(req: RegisterRequest):
-    existing = get_user_by_email(req.email)
+    valid_email = validate_authentic_email(req.email)
+    existing = get_user_by_email(valid_email)
     if existing:
         raise HTTPException(status_code=400, detail="An account with this email already exists.")
 
     pw_hash = hash_password(req.password)
-    user = create_user(email=req.email, name=req.name, password_hash=pw_hash, role="user")
+    user = create_user(email=valid_email, name=req.name, password_hash=pw_hash, role="user")
 
     token = create_access_token(data={"sub": str(user["id"]), "email": user["email"], "role": user["role"]})
     return TokenResponse(

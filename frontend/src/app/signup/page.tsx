@@ -25,9 +25,26 @@ export default function SignupPage() {
     }
   }, [isAuthenticated, router]);
 
+  const DISPOSABLE_PATTERNS = [
+    "tempmail", "10minute", "throwaway", "fakeinbox", "dispostable",
+    "burnermail", "guerrillamail", "mailinator", "yopmail", "trashmail",
+    "dropmail", "fakeemail", "trash-mail", "getairmail", "sharklasers"
+  ];
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    const domain = email.split("@")[1]?.toLowerCase().trim();
+    if (!domain || !domain.includes(".")) {
+      setError("Please enter a valid email address with a complete domain.");
+      return;
+    }
+    if (DISPOSABLE_PATTERNS.some((p) => domain.includes(p))) {
+      setError("Registration with temporary or disposable email platforms is prohibited. Please provide an authentic email address (e.g. Gmail, Outlook, Yahoo, or your official organization domain).");
+      return;
+    }
+
     setIsLoading(true);
 
     try {
@@ -112,6 +129,9 @@ export default function SignupPage() {
                 className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 py-2.5 pl-10 pr-4 text-sm text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-colors"
               />
             </div>
+            <p className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-1">
+              Authentic email required (Gmail, Outlook, Yahoo, or your official organization domain).
+            </p>
           </div>
 
           <div>
