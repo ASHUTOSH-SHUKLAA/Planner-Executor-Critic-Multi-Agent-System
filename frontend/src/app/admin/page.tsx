@@ -333,15 +333,22 @@ export default function AdminPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800/80">
-                  {users.map((u) => (
-                    <tr
-                      key={u.id}
-                      className="hover:bg-zinc-50/50 dark:hover:bg-zinc-900/30 transition-colors"
-                    >
-                      <td className="py-4 px-4 sm:px-6 font-medium text-zinc-900 dark:text-white flex items-center gap-2">
-                        <UserCheck className="h-4 w-4 text-indigo-500" />
-                        <span>{u.name}</span>
+                  {users.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="py-8 text-center text-zinc-500">
+                        No registered users found.
                       </td>
+                    </tr>
+                  ) : (
+                    users.map((u) => (
+                      <tr
+                        key={u.id}
+                        className="hover:bg-zinc-50/50 dark:hover:bg-zinc-900/30 transition-colors"
+                      >
+                        <td className="py-4 px-4 sm:px-6 font-medium text-zinc-900 dark:text-white flex items-center gap-2">
+                          <UserCheck className="h-4 w-4 text-indigo-500" />
+                          <span>{u.name}</span>
+                        </td>
                       <td className="py-4 px-4 font-mono">{u.email}</td>
                       <td className="py-4 px-4">
                         {u.role === "admin" ? (
@@ -359,7 +366,8 @@ export default function AdminPage() {
                       </td>
                       <td className="py-4 px-4 sm:px-6 text-zinc-500">{u.created_at}</td>
                     </tr>
-                  ))}
+                  )))
+                }
                 </tbody>
               </table>
             </div>

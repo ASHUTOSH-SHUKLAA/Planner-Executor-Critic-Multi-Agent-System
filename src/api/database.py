@@ -11,11 +11,16 @@ import bcrypt
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 
-DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "app.db")
+DEFAULT_DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "app.db")
+
+
+def get_db_path() -> str:
+    """Returns the active database file path (supports test database isolation)."""
+    return os.getenv("DATABASE_PATH", DEFAULT_DB_PATH)
 
 
 def get_db_connection() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(get_db_path())
     conn.row_factory = sqlite3.Row
     return conn
 
