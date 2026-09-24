@@ -15,16 +15,9 @@ import {
   streamWorkflowExecution,
   apiDownloadWorkflow,
 } from "@/lib/api";
-import { DAGCanvas } from "@/components/canvas/DAGCanvas";
-import { StepInspector } from "@/components/canvas/StepInspector";
-import { TelemetryBar } from "@/components/canvas/TelemetryBar";
-import { LiveConsole, LogEntry } from "@/components/canvas/LiveConsole";
 import {
   Play,
-  Square,
   Sparkles,
-  ArrowRight,
-  Layers,
   AlertCircle,
   Download,
   FileText,
@@ -33,11 +26,8 @@ import {
   ShieldCheck,
   Cpu,
   CheckCircle2,
-  ChevronDown,
-  ChevronUp,
   ExternalLink,
   BookOpen,
-  Clock,
 } from "lucide-react";
 
 export default function DashboardPage() {
@@ -55,12 +45,7 @@ export default function DashboardPage() {
   const [currentStage, setCurrentStage] = useState<
     "IDLE" | "PLANNING" | "RESEARCHING" | "VALIDATING" | "SYNTHESIZING" | "COMPLETED" | "FAILED"
   >("IDLE");
-  const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
-  const [logs, setLogs] = useState<LogEntry[]>([]);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
-
-  // Technical View Toggle
-  const [showTechnicalCanvas, setShowTechnicalCanvas] = useState(false);
   const [downloadingFormat, setDownloadingFormat] = useState<string | null>(null);
 
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -86,9 +71,8 @@ export default function DashboardPage() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [goal, isRunning, mode, token]);
 
-  const addLog = (agent: string, message: string, level: string = "info") => {
-    const timeStr = new Date().toLocaleTimeString("en-US", { hour12: false });
-    setLogs((prev) => [...prev, { timestamp: timeStr, agent, message, level }]);
+  const addLog = (_agent: string, _message: string, _level: string = "info") => {
+    // telemetry stream
   };
 
   const handleRun = async () => {
@@ -101,8 +85,6 @@ export default function DashboardPage() {
 
     setIsRunning(true);
     setErrorBanner(null);
-    setSelectedStepId(null);
-    setLogs([]);
     setCurrentStage("PLANNING");
 
     const initialState: WorkflowStateData = {
@@ -288,15 +270,6 @@ export default function DashboardPage() {
     }
   };
 
-  const stepsList: StepOutputData[] = workflowState
-    ? Object.values(workflowState.step_outputs)
-    : [];
-
-  const selectedStep =
-    selectedStepId && workflowState?.step_outputs
-      ? workflowState.step_outputs[selectedStepId] || null
-      : null;
-
   return (
     <div className="min-h-screen flex flex-col bg-[var(--background)] text-[var(--foreground)] transition-colors duration-200">
       <Navbar />
@@ -316,35 +289,38 @@ export default function DashboardPage() {
               <textarea
                 rows={3}
                 value={goal}
+                disabled={isRunning}
                 onChange={(e) => setGoal(e.target.value)}
                 placeholder="e.g. Conduct a research in the automobile industry and list out the best car model under 10 lakh in EV vs Diesel."
-                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-900/60 p-3.5 text-sm text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-colors font-sans"
+                className={`w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-900/60 p-3.5 text-sm text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-colors font-sans ${
+                  isRunning ? "opacity-60 cursor-not-allowed" : ""
+                }`}
               />
             </div>
 
             {/* Execution Controls */}
             <div className="flex items-center justify-end pt-3 border-t border-zinc-100 dark:border-zinc-800/80">
-              {/* Action Buttons */}
-              <div className="flex items-center gap-3">
+              <button
+                onClick={handleRun}
+                disabled={isRunning || !goal.trim()}
+                className={`flex items-center gap-2 rounded-xl px-6 py-2.5 text-xs font-bold text-white shadow-lg transition-all ${
+                  isRunning
+                    ? "bg-indigo-600/70 cursor-not-allowed opacity-90 shadow-none ring-2 ring-indigo-500/30"
+                    : "bg-indigo-600 hover:bg-indigo-500 shadow-indigo-500/25 hover:scale-[1.02] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                }`}
+              >
                 {isRunning ? (
-                  <button
-                    onClick={handleStop}
-                    className="flex items-center gap-2 rounded-xl bg-red-600 px-5 py-2.5 text-xs font-bold text-white shadow-lg shadow-red-500/20 hover:bg-red-500 transition-colors cursor-pointer"
-                  >
-                    <Square className="h-3.5 w-3.5 fill-white" />
-                    <span>Stop Execution</span>
-                  </button>
+                  <>
+                    <div className="h-3.5 w-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <span>Researching & Grounding Results...</span>
+                  </>
                 ) : (
-                  <button
-                    onClick={handleRun}
-                    disabled={!goal.trim()}
-                    className="flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-2.5 text-xs font-bold text-white shadow-lg shadow-indigo-500/25 hover:bg-indigo-500 transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:scale-[1.02] cursor-pointer"
-                  >
+                  <>
                     <Play className="h-3.5 w-3.5 fill-white" />
                     <span>Run Multi-Agent Research</span>
-                  </button>
+                  </>
                 )}
-              </div>
+              </button>
             </div>
           </div>
         </div>
@@ -614,58 +590,6 @@ export default function DashboardPage() {
             )}
           </div>
         )}
-
-        {/* Technical DAG & Console Toggle Section */}
-        <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/80 overflow-hidden shadow-sm">
-          <button
-            onClick={() => setShowTechnicalCanvas(!showTechnicalCanvas)}
-            className="w-full flex items-center justify-between p-4 px-5 bg-zinc-50 dark:bg-zinc-900/60 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-colors text-left cursor-pointer"
-          >
-            <div className="flex items-center gap-2 text-xs font-semibold text-zinc-800 dark:text-zinc-200">
-              <Layers className="h-4 w-4 text-indigo-500" />
-              <span>Technical DAG Inspector & Live Agent Logs</span>
-              {stepsList.length > 0 && (
-                <span className="rounded-full bg-zinc-200 dark:bg-zinc-800 px-2 py-0.5 text-[10px] font-mono text-zinc-600 dark:text-zinc-400">
-                  {stepsList.length} Nodes
-                </span>
-              )}
-            </div>
-
-            <div className="flex items-center gap-1.5 text-xs text-zinc-500">
-              <span>{showTechnicalCanvas ? "Hide Inspector" : "Show Inspector"}</span>
-              {showTechnicalCanvas ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-            </div>
-          </button>
-
-          {showTechnicalCanvas && (
-            <div className="flex flex-col border-t border-zinc-200 dark:border-zinc-800">
-              <TelemetryBar
-                state={workflowState}
-                isRunning={isRunning}
-                mode={mode}
-              />
-
-              <div className="flex flex-col lg:flex-row relative min-h-[460px] overflow-hidden">
-                <div className="flex-1 h-full min-h-[400px] relative">
-                  <DAGCanvas
-                    steps={stepsList}
-                    selectedStepId={selectedStepId}
-                    onSelectStep={(id) => setSelectedStepId(id)}
-                  />
-                </div>
-
-                <div className="w-full lg:w-96 h-full min-h-[300px] lg:min-h-0 border-t lg:border-t-0 lg:border-l border-zinc-200 dark:border-zinc-800 flex-shrink-0">
-                  <StepInspector
-                    step={selectedStep}
-                    onClose={() => setSelectedStepId(null)}
-                  />
-                </div>
-              </div>
-
-              <LiveConsole logs={logs} onClear={() => setLogs([])} />
-            </div>
-          )}
-        </div>
       </main>
     </div>
   );

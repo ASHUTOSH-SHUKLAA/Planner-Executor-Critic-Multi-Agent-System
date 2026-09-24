@@ -90,3 +90,13 @@ def get_all_workflows(admin: Dict[str, Any] = Depends(require_admin)):
         )
         for r in records
     ]
+
+
+@router.get("/server-logs")
+def get_server_logs(admin: Dict[str, Any] = Depends(require_admin)):
+    """Returns the persistent server audit log file content from logs/user_activity.log."""
+    from src.api.audit_logger import get_server_log_content
+    return {
+        "log_file": "logs/user_activity.log",
+        "content": get_server_log_content(max_lines=500),
+    }

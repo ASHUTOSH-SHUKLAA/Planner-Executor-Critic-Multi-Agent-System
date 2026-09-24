@@ -194,6 +194,15 @@ def register(req: RegisterRequest):
     pw_hash = hash_password(req.password)
     user = create_user(email=valid_email, name=req.name, password_hash=pw_hash, role="user")
 
+    from src.api.audit_logger import log_user_event
+    log_user_event(
+        action="USER_REGISTRATION",
+        user_id=user["id"],
+        email=user["email"],
+        role=user["role"],
+        details=f"New user registered: '{user['name']}'",
+    )
+
     token = create_access_token(data={"sub": str(user["id"]), "email": user["email"], "role": user["role"]})
     return TokenResponse(
         access_token=token,
@@ -208,6 +217,16 @@ def login(req: LoginRequest):
         raise HTTPException(status_code=401, detail="Invalid email or password.")
 
     user_role = user.get("role", "user")
+
+    from src.api.audit_logger import log_user_event
+    log_user_event(
+        action="USER_LOGIN",
+        user_id=user["id"],
+        email=user["email"],
+        role=user_role,
+        details="User authenticated successfully",
+    )
+
     token = create_access_token(data={"sub": str(user["id"]), "email": user["email"], "role": user_role})
     return TokenResponse(
         access_token=token,

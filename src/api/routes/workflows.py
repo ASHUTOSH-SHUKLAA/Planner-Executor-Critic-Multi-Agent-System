@@ -147,6 +147,16 @@ def download_workflow_report(
                 lines.append(f"   > \"{snippet}\"\n")
 
     content = "\n".join(lines)
+    from src.api.audit_logger import log_user_event
+    log_user_event(
+        action="REPORT_DOWNLOADED",
+        user_id=current_user["id"],
+        email=current_user.get("email"),
+        role=current_user.get("role"),
+        details=f"Downloaded report format='{format}'",
+        extra={"workflow_id": workflow_id},
+    )
+
     filename = f"triadflow_{workflow_id}.{format}"
     media_type = "text/markdown" if format == "md" else "text/plain"
 
@@ -176,6 +186,15 @@ async def run_workflow_stream(
             try:
                 # 1. Task Intake
                 state = WorkflowState(task=req.task.strip(), user_id=user_id)
+                from src.api.audit_logger import log_user_event
+                log_user_event(
+                    action="WORKFLOW_STARTED",
+                    user_id=user_id,
+                    email=current_user.get("email"),
+                    role=current_user.get("role"),
+                    details=f"Goal: '{state.task[:100]}'",
+                    extra={"workflow_id": state.workflow_id, "mode": req.mode},
+                )
                 await queue.put({
                     "event": "workflow_started",
                     "data": {
@@ -426,6 +445,21 @@ async def run_workflow_stream(
                     total_tokens=state.total_tokens,
                     estimated_cost_usd=state.estimated_cost_usd,
                     state_dict=state.model_dump(),
+                )
+
+                from src.api.audit_logger import log_user_event
+                log_user_event(
+                    action="WORKFLOW_COMPLETED",
+                    user_id=user_id,
+                    email=current_user.get("email"),
+                    role=current_user.get("role"),
+                    details="Autonomous research finished successfully",
+                    extra={
+                        "workflow_id": state.workflow_id,
+                        "total_tokens": state.total_tokens,
+                        "cost_usd": f"${state.estimated_cost_usd:.5f}",
+                        "sources_count": len(state.sources),
+                    },
                 )
                 await queue.put({
                     "event": "workflow_completed",

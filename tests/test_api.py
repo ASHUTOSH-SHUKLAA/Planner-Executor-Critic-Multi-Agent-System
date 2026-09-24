@@ -211,6 +211,15 @@ def test_rbac_admin_endpoints():
     assert wf_resp.status_code == 200
     assert isinstance(wf_resp.json(), list)
 
+    # 7. Admin accessing /api/admin/server-logs gets 200
+    logs_resp = client.get(
+        "/api/admin/server-logs",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert logs_resp.status_code == 200
+    assert "log_file" in logs_resp.json()
+    assert "content" in logs_resp.json()
+
 
 def test_workflow_download_and_ownership():
     """Verify download endpoint ownership checks and 404 handling."""
