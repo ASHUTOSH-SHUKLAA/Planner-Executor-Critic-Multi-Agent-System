@@ -216,14 +216,11 @@ class GeminiProvider(BaseLLMProvider):
         """
         selected_model = model or self.default_model
 
-        # Use native Gemini structured schema if supported, plus prompt guidance
-        schema_json = json.dumps(response_model.model_json_schema(), indent=2)
+        # Compact schema prompt combined with native Gemini response_schema
+        schema_json = json.dumps(response_model.model_json_schema())
         augmented_system_prompt = (
             f"{system_prompt}\n\n"
-            "CRITICAL INSTRUCTION:\n"
-            "You MUST respond ONLY with a valid JSON object matching this exact schema:\n"
-            f"```json\n{schema_json}\n```\n"
-            "Do NOT include any commentary, greetings, or markdown code fences outside the JSON."
+            f"Respond ONLY with a valid JSON object adhering strictly to schema: {schema_json}"
         )
 
         config = types.GenerateContentConfig(

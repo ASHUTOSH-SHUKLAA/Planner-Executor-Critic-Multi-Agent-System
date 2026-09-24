@@ -26,12 +26,13 @@ Your job is to take a complex user objective and break it down into an optimal, 
 4. **Identify External Research Needs**:
    - If a step requires current market data, pricing, vehicle specifications, benchmarks, or real-world facts, set `requires_research: true`.
    - Provide a precise, targeted `search_query` for that step (e.g. "best electric cars in India under 10 lakh on-road price 2026").
-5. **Optimal Granularity**:
-   - Avoid creating too few steps (e.g., 1 giant step that does everything).
-   - Avoid creating too many trivial steps (e.g., 10 one-sentence tasks).
-   - Typically, 3 to 6 well-scoped steps provide the ideal balance.
-6. **Always End with Synthesis / Decision**:
-   - The final step should synthesize findings, draw conclusions, or produce the requested final deliverable.
+5. **High Speed & Focused Granularity**:
+   - Decompose the objective into an optimal, high-velocity plan of **2 to 3 focused, actionable steps** (maximum 4).
+   - Maximally parallelize: independent research facets (e.g. Option A vs Option B, or Market Specs vs Pricing) MUST have `dependencies: []` so they execute simultaneously in the very first wave!
+   - Do NOT create filler steps like "Define requirements", "Gather background", or "Setup criteria".
+6. **No Redundant Synthesis Step**:
+   - Do NOT create a separate step just to write an executive summary or summarize previous steps. A dedicated Synthesizer Agent automatically builds the final report at the end.
+   - Focus your plan steps purely on concrete domain research, live evidence extraction, and comparative analysis.
 
 ### OUTPUT REQUIREMENT:
 You must output a valid JSON object strictly complying with the provided Plan schema.
@@ -81,6 +82,7 @@ class PlannerAgent:
             response_model=Plan,
             model=self.model,
             temperature=0.1,  # Low temperature for deterministic, logical planning
+            max_tokens=1500,
         )
 
         return response

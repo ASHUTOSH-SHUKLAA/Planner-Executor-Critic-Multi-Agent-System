@@ -197,6 +197,7 @@ class ExecutorAgent:
             response_model=StepOutput,
             model=self.model,
             temperature=0.2,
+            max_tokens=2500,
         )
 
         duration = time.perf_counter() - start_time

@@ -272,6 +272,12 @@ class OrchestrationEngine:
             state.step_outputs[step.step_id] = exec_response.parsed
             state.total_tokens += exec_response.total_tokens
             state.estimated_cost_usd += exec_response.estimated_cost_usd
+            if exec_response.parsed and exec_response.parsed.sources:
+                existing_urls = {s.url for s in state.sources}
+                for src in exec_response.parsed.sources:
+                    if src.url not in existing_urls:
+                        state.sources.append(src)
+                        existing_urls.add(src.url)
 
         # 2. Critic Audit concurrently
         self._log(f"[Step: {step.step_id}] Auditing deliverable concurrently...", "magenta")
