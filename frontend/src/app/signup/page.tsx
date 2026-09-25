@@ -17,7 +17,6 @@ export default function SignupPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
-  const [devCode, setDevCode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [resendCountdown, setResendCountdown] = useState(0);
@@ -63,12 +62,9 @@ export default function SignupPage() {
 
     setIsLoading(true);
     try {
-      const result = await requestCode(cleanEmail, name.trim());
+      await requestCode(cleanEmail, name.trim());
       setStep("code");
       setResendCountdown(60);
-      if (result.dev_code) {
-        setDevCode(result.dev_code);
-      }
       success("Verification code dispatched", "Check Inbox");
     } catch (err: any) {
       setError(err.message || "Failed to dispatch verification code. Please try again.");
@@ -206,20 +202,6 @@ export default function SignupPage() {
           </form>
         ) : (
           <form onSubmit={handleVerifyCode} className="space-y-4">
-            {devCode && (
-              <div
-                onClick={() => setCode(devCode)}
-                className="cursor-pointer rounded-xl bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/60 p-3 text-xs text-indigo-700 dark:text-indigo-300 flex items-center justify-between hover:bg-indigo-100/80 transition-colors"
-                title="Click to auto-fill code"
-              >
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-indigo-500 flex-shrink-0" />
-                  <span>Test OTP: <strong className="font-mono tracking-widest text-sm">{devCode}</strong></span>
-                </div>
-                <span className="text-[10px] underline font-medium">Click to fill</span>
-              </div>
-            )}
-
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
@@ -230,7 +212,6 @@ export default function SignupPage() {
                   onClick={() => {
                     setStep("details");
                     setCode("");
-                    setDevCode(null);
                     setError(null);
                   }}
                   className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline inline-flex items-center gap-1 cursor-pointer"

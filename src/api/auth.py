@@ -204,17 +204,26 @@ def require_admin(current_user: Dict[str, Any] = Depends(get_current_user)) -> D
     return current_user
 
 
+from src.api.email_service import send_verification_email, is_smtp_configured
+
 # --- Endpoints ---
 @router.post("/send-code", response_model=SendCodeResponse)
 def send_auth_code(req: SendCodeRequest):
     """
     Passwordless Email Authentication: Step 1.
     Validates authentic email (rejects disposable mail), generates a 6-digit cryptographic OTP,
-    persists code with 10-minute expiry, and records the event in audit logs.
+    persists code with 10-minute expiry, sends OTP via SMTP if configured, and records the event in audit logs.
     """
     valid_email = validate_authentic_email(req.email)
     code = f"{secrets.randbelow(900000) + 100000:06d}"
     save_verification_code(email=valid_email, code=code, expires_in_minutes=10)
+
+    # Attempt live email delivery via SMTP
+    smtp_sent, smtp_detail = send_verification_email(
+        to_email=valid_email,
+        code=code,
+        user_name=req.name,
+    )
 
     from src.api.audit_logger import log_user_event
     log_user_event(
@@ -222,18 +231,30 @@ def send_auth_code(req: SendCodeRequest):
         user_id=None,
         email=valid_email,
         role="pending",
-        details="Verification code generated and dispatched (Expires in 10m)",
+        details=f"Verification code generated (SMTP sent: {smtp_sent}, detail: {smtp_detail})",
     )
     print(f"\n[AUTH SERVICE] ==================================================")
     print(f"[AUTH SERVICE] Dispatching 6-Digit Verification Code to: {valid_email}")
+    print(f"[AUTH SERVICE] SMTP Delivery: {'SUCCESS (Email sent to inbox)' if smtp_sent else 'FALLBACK (SMTP unconfigured - printed to console)'}")
     print(f"[AUTH SERVICE] Code: >>> {code} <<< (Valid for 10 minutes)")
     print(f"[AUTH SERVICE] ==================================================\n")
 
+    # dev_code is strictly withheld in production and only accessible during automated test runner execution
+    is_test_env = bool(os.getenv("PYTEST_CURRENT_TEST") or os.getenv("TESTING", "").lower() in ("true", "1"))
+    returned_dev_code = code if is_test_env else None
+
+    if smtp_sent:
+        response_msg = f"Verification code sent to {valid_email}. Please check your inbox."
+    elif is_smtp_configured():
+        response_msg = f"Verification code generated, but SMTP dispatch encountered an issue: {smtp_detail}. Check server logs."
+    else:
+        response_msg = f"Verification code generated. Outbound SMTP is not configured in .env (check server console for OTP or configure SMTP settings)."
+
     return SendCodeResponse(
         status="success",
-        message=f"Verification code sent to {valid_email}. Please check your inbox or server logs.",
+        message=response_msg,
         email=valid_email,
-        dev_code=code,
+        dev_code=returned_dev_code,
     )
 
 
