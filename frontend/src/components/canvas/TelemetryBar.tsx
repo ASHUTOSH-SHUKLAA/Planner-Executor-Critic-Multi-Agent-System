@@ -102,9 +102,6 @@ export function TelemetryBar({
         ) : (
           <span className="text-zinc-400 dark:text-zinc-500 font-mono">System Idle</span>
         )}
-        <span className="rounded-lg bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-2 py-0.5 font-mono text-[11px] text-zinc-600 dark:text-zinc-400">
-          Engine: <strong className="text-zinc-900 dark:text-zinc-200 uppercase">{mode}</strong>
-        </span>
         {stepCount > 0 && (
           <span className="font-mono text-zinc-500 dark:text-zinc-400 hidden sm:inline">
             Steps: <strong className="text-zinc-900 dark:text-white">{completedSteps}</strong> / {stepCount}

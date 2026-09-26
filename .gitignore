@@ -22,3 +22,5 @@ htmlcov/
 scratch/
 powershell.bat
 app.db
+
+.env

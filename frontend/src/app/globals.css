@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
 @import "@xyflow/react/dist/style.css";
 
 /* Base Design Tokens */

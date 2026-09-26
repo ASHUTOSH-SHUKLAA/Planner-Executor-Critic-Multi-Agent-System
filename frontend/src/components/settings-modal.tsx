@@ -1,14 +1,10 @@
 "use client";
 
 import React, { useState } from "react";
-import { useTheme } from "@/lib/theme-context";
 import { useToast } from "@/lib/toast-context";
 import {
   X,
   Sliders,
-  Sun,
-  Moon,
-  Laptop,
   CheckCircle2,
   Cpu,
   Shield,
@@ -22,16 +18,14 @@ interface SettingsModalProps {
 }
 
 export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
-  const { theme, setTheme } = useTheme();
   const { success } = useToast();
 
   const [strictness, setStrictness] = useState<"standard" | "strict">("standard");
-  const [telemetryVerbosity, setTelemetryVerbosity] = useState<"standard" | "detailed">("detailed");
 
   if (!isOpen) return null;
 
   const handleSave = () => {
-    success("Execution and display preferences saved", "Settings Updated");
+    success("Agent configuration preferences saved", "Settings Updated");
     onClose();
   };
 
@@ -47,13 +41,13 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             <div>
               <h3 className="text-base font-bold">Studio Configuration</h3>
               <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                Customize agent engine thresholds and workspace appearance
+                Configure autonomous agent thresholds and engine execution parameters
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded-lg text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+            className="p-1 rounded-lg text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
           >
             <X className="h-5 w-5" />
           </button>
@@ -61,53 +55,6 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
         {/* Settings Body */}
         <div className="py-5 space-y-6 max-h-[70vh] overflow-y-auto pr-1">
-          {/* Theme Option */}
-          <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-2">
-              Appearance & Theme
-            </label>
-            <div className="grid grid-cols-3 gap-2.5">
-              <button
-                type="button"
-                onClick={() => setTheme("light")}
-                className={`flex items-center justify-center gap-2 p-3 rounded-xl border text-xs font-semibold transition-all ${
-                  theme === "light"
-                    ? "border-indigo-600 bg-indigo-50/50 text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-300 ring-1 ring-indigo-500"
-                    : "border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-900"
-                }`}
-              >
-                <Sun className="h-4 w-4 text-amber-500" />
-                <span>Light</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setTheme("dark")}
-                className={`flex items-center justify-center gap-2 p-3 rounded-xl border text-xs font-semibold transition-all ${
-                  theme === "dark"
-                    ? "border-indigo-600 bg-indigo-50/50 text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-300 ring-1 ring-indigo-500"
-                    : "border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-900"
-                }`}
-              >
-                <Moon className="h-4 w-4 text-indigo-400" />
-                <span>Dark</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setTheme("system")}
-                className={`flex items-center justify-center gap-2 p-3 rounded-xl border text-xs font-semibold transition-all ${
-                  theme === "system"
-                    ? "border-indigo-600 bg-indigo-50/50 text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-300 ring-1 ring-indigo-500"
-                    : "border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-900"
-                }`}
-              >
-                <Laptop className="h-4 w-4 text-zinc-400" />
-                <span>System</span>
-              </button>
-            </div>
-          </div>
-
           {/* Critic Gating Strictness */}
           <div>
             <div className="flex items-center justify-between mb-2">
