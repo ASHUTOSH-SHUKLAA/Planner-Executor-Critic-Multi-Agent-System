@@ -1,21 +1,23 @@
-# TriadFlow: Multi-Agent Architecture & Engineering Reference
+# AegisFlow: Multi-Agent Architecture & Engineering Reference
 
-> **An Autonomous Planner–Executor–Critic Multi-Agent Research System**
+> **An Enterprise Planner–Executor–Critic Multi-Agent Orchestration Platform**  
 > Production-grade, deterministic, and verifiable multi-agent framework built with FastAPI, Next.js 16, SQLite, and Google Gemini.
 
 ---
 
 ## 1. System Entry Points
 
-When inspecting or running the TriadFlow application, start at the following explicit entry points:
+When inspecting or running the AegisFlow application, start at the following explicit entry points:
 
 | Layer | Entry File | Protocol / Port | Purpose |
 | :--- | :--- | :--- | :--- |
-| **Backend API** | [`src/api/main.py`](file:///c:/Users/Ashuu/Documents/Sem%205/Projects/OJTProject/src/api/main.py) | HTTP / Port `8000` | FastAPI server entry point, CORS middleware, router registration, OpenAPI/Swagger docs (`/docs`). |
-| **Frontend Web** | [`frontend/src/app/page.tsx`](file:///c:/Users/Ashuu/Documents/Sem%205/Projects/OJTProject/frontend/src/app/page.tsx) | HTTP / Port `3000` | Next.js 16 App Router landing page, feature highlights, and authentication links. |
-| **Agent Triad Orchestrator** | [`src/orchestrator/engine.py`](file:///c:/Users/Ashuu/Documents/Sem%205/Projects/OJTProject/src/orchestrator/engine.py) | Python Engine | Core multi-agent state machine managing DAG execution, batching, critic evaluation, and bounded self-correction. |
-| **Researcher Dashboard** | [`frontend/src/app/dashboard/page.tsx`](file:///c:/Users/Ashuu/Documents/Sem%205/Projects/OJTProject/frontend/src/app/dashboard/page.tsx) | Browser View | Core research interface with real-time SSE streaming, 4-stage stepper, live citations drawer, and report export. |
+| **Backend API** | [`src/api/main.py`](file:///c:/Users/Ashuu/Documents/Sem%205/Projects/OJTProject/src/api/main.py) | HTTP / Port `8000` | FastAPI server entry point, CORS middleware, router registration, OpenAPI/Swagger docs (`http://localhost:8000/docs`). |
+| **Frontend Web** | [`frontend/src/app/page.tsx`](file:///c:/Users/Ashuu/Documents/Sem%205/Projects/OJTProject/frontend/src/app/page.tsx) | HTTP / Port `3000` | Next.js 16 App Router interface: Seamless Home landing, search composer, and live research workspace canvas. |
+| **Agent Orchestrator Engine** | [`src/orchestrator/engine.py`](file:///c:/Users/Ashuu/Documents/Sem%205/Projects/OJTProject/src/orchestrator/engine.py) | Python Engine | Core multi-agent state machine managing DAG execution, batching, critic evaluation, and bounded self-correction. |
+| **Research History Console** | [`frontend/src/app/history/page.tsx`](file:///c:/Users/Ashuu/Documents/Sem%205/Projects/OJTProject/frontend/src/app/history/page.tsx) | Browser View | Interactive research thread archive with instant reload, thread deletion, and search filtering. |
 | **Admin Governance Console** | [`frontend/src/app/admin/page.tsx`](file:///c:/Users/Ashuu/Documents/Sem%205/Projects/OJTProject/frontend/src/app/admin/page.tsx) | Browser View | Administrative dashboard for user registries, cross-company workflows, token expenditure telemetry, and live server audit logs. |
+| **PDF Export Engine** | [`src/api/routes/workflows.py`](file:///c:/Users/Ashuu/Documents/Sem%205/Projects/OJTProject/src/api/routes/workflows.py) | HTTP Endpoint | `/api/export-pdf`: ReportLab-powered publication-grade PDF generator with citations and metadata. |
+| **Benchmarking Suite** | [`benchmarks/run_benchmarks.py`](file:///c:/Users/Ashuu/Documents/Sem%205/Projects/OJTProject/benchmarks/run_benchmarks.py) | CLI Test Harness | Standardized 20-task benchmark suite measuring WSR, Recovery Rate, and Critic precision. |
 
 ---
 
@@ -23,19 +25,29 @@ When inspecting or running the TriadFlow application, start at the following exp
 
 ```text
 OJTProject/
-├── ARCHITECTURE.md                  # Comprehensive architectural guide & engineering reference (This document)
-├── README.md                        # Project quickstart, installation, and deployment guide
+├── ARCHITECTURE.md                  # Comprehensive architectural guide & engineering reference
+├── Enterprise_MultiAgent_Orchestrator_PRD_v2.0.md # Product Requirements Document (PRD v2.0)
+├── OJT_Project_Logbook_AegisFlow.md # Complete milestone logbook and evaluation report
+├── README.md                        # Quickstart guide, installation, and deployment documentation
 ├── app.db                           # SQLite persistent database (Users, Workflows, OTP Codes)
+├── requirements.txt                 # Python dependencies (FastAPI, SQLModel, ReportLab, etc.)
+├── pytest.ini                       # Pytest execution configuration
+│
+├── benchmarks/                      # Empirical Performance Benchmarking
+│   ├── run_benchmarks.py            # Automated runner for 20 standardized tasks
+│   ├── tasks.json                   # Standardized 20-task dataset across 10 categories
+│   └── results.md                   # Latency, token expenditure, and recovery metrics
+│
 ├── logs/                            # Production server logs directory
 │   ├── user_activity.log            # Human-readable timestamped server security audit trail
 │   └── user_workflows.jsonl         # Machine-readable structured JSONL logs for analytics/SIEM
 │
 ├── src/                             # Core Backend Python Source Code
-│   ├── agents/                      # Multi-Agent Triad implementations
+│   ├── agents/                      # Specialized Multi-Agent Implementations
 │   │   ├── planner.py               # Planner Agent: Decomposes goal into structured DAG
 │   │   ├── executor.py              # Executor Agent: Runs steps, searches web, grounds evidence
 │   │   ├── critic.py                # Critic Agent: Adversarial evaluation (correctness, completeness, relevance)
-│   │   └── synthesizer.py           # Synthesizer Agent: Generates final executive report with citations
+│   │   └── synthesizer.py           # Synthesizer Agent: Compiles verified step deliverables and citations
 │   │
 │   ├── orchestrator/                # Orchestration & Scheduling Engine
 │   │   └── engine.py                # OrchestrationEngine: Coordinates Planner-Executor-Critic lifecycle & recovery loops
@@ -44,7 +56,7 @@ OJTProject/
 │   │   └── search.py                # Live Web Search tool via DuckDuckGo with strict URL deduplication
 │   │
 │   ├── llm/                         # LLM Gateway & Provider Abstraction
-│   │   └── gateway.py               # Google Gemini integration (gemini-flash-lite-latest) with fallback cascade
+│   │   └── gateway.py               # Google Gemini integration with fallback cascade and token budgeting
 │   │
 │   ├── models/                      # Pydantic Schemas & Data Contracts
 │   │   └── schemas.py               # WorkflowState, Plan, Step, CriticReview, SourceCitation models
@@ -55,34 +67,53 @@ OJTProject/
 │       ├── database.py              # SQLite data access layer: Users, Workflows, OTP verification codes
 │       ├── audit_logger.py          # Security audit logger writing to logs/
 │       └── routes/                  # Modular API Route Handlers
-│           ├── workflows.py         # POST /run-stream (SSE), GET /, GET /{id}/download
+│           ├── workflows.py         # POST /run-stream (SSE), GET /, GET /{id}/download, /api/export-pdf
 │           └── admin.py             # GET /stats, GET /users, GET /workflows, GET /server-logs
 │
 ├── frontend/                        # Next.js 16 + Tailwind CSS Frontend Application
+│   ├── public/                      # Static web assets, brand icons, and favicons
+│   ├── scripts/                     # Automated UI Invariant & Token Test Harness
+│   │   ├── home-locked-tokens.json  # Locked CSS token baseline snapshot
+│   │   ├── check-locked-tokens.mjs  # Token baseline comparator
+│   │   ├── test-home-refinement.mjs # 64px rail, 820px layout, and contrast tests (7/7 PASS)
+│   │   ├── test-pipeline-stage.mjs  # PRD Invariants & Multi-Scenario test suite (33/33 PASS)
+│   │   ├── test-research-view-model.mjs # View-model & fixture regression suite (24/24 PASS)
+│   │   └── test-typography.mjs      # Typography pairing and optical token tests (33/33 PASS)
+│   │
 │   ├── src/
 │   │   ├── app/                     # Next.js App Router Pages
-│   │   │   ├── page.tsx             # Landing page
+│   │   │   ├── page.tsx             # Unified Home & Live Research Canvas
 │   │   │   ├── layout.tsx           # Global root layout with theme & auth providers
-│   │   │   ├── dashboard/page.tsx   # Researcher workspace: Prompt input, SSE streaming, Markdown preview
-│   │   │   ├── admin/page.tsx       # Admin console: User table, workflow monitoring, server audit log stream
+│   │   │   ├── globals.css          # Semantic tokens, typography resets, smooth sidebar transitions
+│   │   │   ├── history/page.tsx     # Thread archive with instant reload and delete
+│   │   │   ├── admin/page.tsx       # Admin console: User table, workflow telemetry, server audit logs
 │   │   │   ├── login/page.tsx       # Passwordless OTP email login
 │   │   │   └── signup/page.tsx      # Passwordless OTP email registration
 │   │   │
-│   │   ├── components/              # Reusable UI Components
-│   │   │   ├── navbar.tsx           # Global responsive navigation header
-│   │   │   ├── theme-toggle.tsx     # Light/Dark mode switcher
-│   │   │   ├── toast.tsx            # Toast notification banner
-│   │   │   └── settings-modal.tsx   # AI Studio configuration modal
+│   │   ├── components/              # UI Components
+│   │   │   ├── navbar.tsx           # Responsive header with user profile menu
+│   │   │   ├── research-sidebar.tsx # Collapsible 64px icon rail with zero-jerk transitions
+│   │   │   ├── research-workspace.tsx # Core research layout: Question, Progress, Report, Sources
+│   │   │   ├── theme-toggle.tsx     # Dark/Light mode switcher
+│   │   │   └── research/            # Modular Research Components
+│   │   │       ├── QuestionCard.tsx        # Editable query card with inline stop controls
+│   │   │       ├── ResearchProgressRow.tsx # Compact live status indicator
+│   │   │       ├── StepsChecklist.tsx      # Expandable DAG step progress checklist
+│   │   │       ├── AnswerBody.tsx          # Rendered report markdown with interactive citation tooltips
+│   │   │       ├── SourcesPanel.tsx        # Sticky right-hand cited sources panel with favicons
+│   │   │       ├── ConversationThread.tsx  # Interactive multi-turn follow-up question thread
+│   │   │       └── ReportActionsPanel.tsx  # One-click Copy, Share, Save, and Export as PDF
 │   │   │
-│   │   └── lib/                     # Frontend Core Utilities & Contexts
+│   │   └── lib/                     # Frontend Utilities & Contexts
 │   │       ├── api.ts               # Typed API client, SSE stream consumer, download helpers
 │   │       ├── auth-context.tsx     # React AuthContext: Token storage, user state, OTP actions
-│   │       └── toast-context.tsx    # Toast notification context
+│   │       ├── research-view-model.ts # Reactive mapping from workflow state to UI view-model
+│   │       └── typography-config.ts # Typography pairings and font stack definitions
 │   │
 │   ├── package.json                 # Frontend dependencies (Next.js 16, Lucide, Tailwind, React-Markdown)
-│   └── tailwind.config.ts           # Tailwind CSS configuration with dark mode support
+│   └── tsconfig.json                # TypeScript compiler configuration
 │
-└── tests/                           # Complete Pytest Test Suite (35+ Unit & Integration Tests)
+└── tests/                           # Pytest Test Suite
     ├── test_api.py                  # API endpoints, OTP auth flow, RBAC, ownership checks
     ├── test_planner.py              # Planner DAG decomposition & dependency ordering
     ├── test_executor.py             # Step execution, dependency context scoping
@@ -91,7 +122,8 @@ OJTProject/
     ├── test_parallel.py             # Topological batching & parallel execution speedup
     ├── test_recovery.py             # Bounded retry recovery & replanning loop limits
     ├── test_schemas.py              # Pydantic validation (acyclic DAG, step IDs, ratings)
-    └── test_llm_gateway.py          # Token & cost estimation, failover configuration
+    ├── test_pdf_export.py           # ReportLab PDF deliverable generation tests
+    └── test_domain_classifier.py    # URL domain taxonomy and source verification
 ```
 
 ---
@@ -116,7 +148,7 @@ OJTProject/
 
 ### B. Industry-Standard Passwordless Email OTP Authentication
 
-TriadFlow implements a **Passwordless One-Time Password (OTP)** authentication flow:
+AegisFlow implements a **Passwordless One-Time Password (OTP)** authentication flow:
 
 ```mermaid
 sequenceDiagram
@@ -145,25 +177,21 @@ sequenceDiagram
         Auth->>Log: log_user_event("USER_LOGIN" / "USER_REGISTRATION")
         Auth-->>Client: 200 OK { access_token: JWT, user: { role } }
         Client->>Client: Store JWT in localStorage
-        Client-->>User: Redirect to /dashboard (User) or /admin (Admin)
+        Client-->>User: Redirect to / (User) or /admin (Admin)
     else Code Invalid / Expired / Max Attempts Exceeded
         Auth-->>Client: 400 Bad Request { detail: "Invalid verification code" }
     end
 ```
 
-#### Why Passwordless Email OTP is the Modern Standard:
-1. **Zero Credential Stuffing / Leaks:** Passwords are frequently reused across platforms, making credential stuffing a top vulnerability. Passwordless authentication completely eliminates stored passwords and brute force breaches.
-2. **Mandatory Mailbox Ownership Proof:** Users must prove possession of a reachable, verified mailbox before access is granted.
-3. **Disposable / Burner Email Mitigation:** Combined with DNS reachability and disposable keyword checks (`validate_authentic_email`), bot accounts and temporary mail services are blocked at the perimeter.
-4. **Security Controls Built-In:**
-   - Cryptographically random 6-digit OTP generated via Python's `secrets` module.
-   - Strict 10-minute expiration window.
-   - Automatic 5-attempt rate-limiting lockout to prevent brute-forcing.
-   - Immediate deletion upon successful verification (replay protection).
+#### Security Controls:
+- Cryptographically random 6-digit OTP generated via Python's `secrets` module.
+- Strict 10-minute expiration window.
+- Automatic 5-attempt rate-limiting lockout to prevent brute-forcing.
+- Immediate deletion upon successful verification (replay protection).
 
 ---
 
-## 4. Multi-Agent Pipeline Execution Flow
+## 4. Multi-Agent Finite State Machine Execution Flow
 
 ```mermaid
 flowchart TD
@@ -172,31 +200,34 @@ flowchart TD
     end
 
     subgraph PlannerAgent ["2. Planner Agent"]
-        SSEStream --> Planner["Planner decomposes Goal into DAG"]
-        Planner --> DAGValidation{"Validate DAG (Acyclic, Valid Dependencies)"}
+        SSEStream --> StateReceived["State: TASK_RECEIVED"]
+        StateReceived --> Planner["State: PLANNING (Decompose Goal into DAG)"]
+        Planner --> DAGValidation{"State: PLAN_READY (Validate Acyclicity & Deps)"}
     end
 
     subgraph ExecutorAgent ["3. Executor Agent (Parallel / Sequential)"]
-        DAGValidation --> BatchScheduler["Topological Batch Scheduler"]
+        DAGValidation --> BatchScheduler["State: EXECUTING (Topological Wave Scheduler)"]
         BatchScheduler --> StepExecution["Execute Step with Scoped Context"]
         StepExecution --> ToolExecution["Execute Tool: DuckDuckGo Live Search"]
         ToolExecution --> EvidenceGrounding["Extract Evidence Snippets & Deduplicate Citations"]
     end
 
     subgraph CriticAgent ["4. Critic Agent (Adversarial Audit)"]
-        EvidenceGrounding --> CriticAudit["Critic Review (Scores: 1-10)"]
-        CriticAudit --> DecisionCheck{"Decision: PASS or RETRY?"}
-        DecisionCheck -- "RETRY (Score < 7, Retries < 2)" --> StepExecution
-        DecisionCheck -- "FAIL (Exceeded Retries)" --> Replanner["Trigger Dynamic DAG Replanning"]
+        EvidenceGrounding --> CriticAudit["State: CRITIC_REVIEW (Score >= 0.70 Threshold)"]
+        CriticAudit --> DecisionCheck{"Decision: PASS or REJECT?"}
+        DecisionCheck -- "REJECT (retry < 2)" --> RetryState["State: RETRY (Injected Feedback)"]
+        RetryState --> StepExecution
+        DecisionCheck -- "REJECT (retry = 2)" --> Replanner["State: REPLANNING (Dynamic DAG Mutation)"]
         Replanner --> BatchScheduler
     end
 
     subgraph SynthesizerAgent ["5. Synthesizer Agent"]
-        DecisionCheck -- "PASS" --> CheckAllDone{"All Steps Completed?"}
+        DecisionCheck -- "PASS" --> CheckAllDone{"All Steps STEP_PASSED?"}
         CheckAllDone -- "No" --> BatchScheduler
-        CheckAllDone -- "Yes" --> FinalSynthesis["Synthesizer aggregates validated outputs"]
-        FinalSynthesis --> Deliverable["Publication-Ready Report + Sources + Telemetry"]
-        Deliverable --> ExportOptions["Export as Markdown (.md) or Plaintext (.txt)"]
+        CheckAllDone -- "Yes" --> FinalSynthesis["State: FINAL_SYNTHESIS (Compiles Verified Findings)"]
+        FinalSynthesis --> CompletedState["State: COMPLETED"]
+        CompletedState --> Deliverable["Publication-Ready Report + Sources + Telemetry"]
+        Deliverable --> ExportOptions["Export as PDF (.pdf)"]
     end
 ```
 
@@ -251,22 +282,31 @@ CREATE TABLE IF NOT EXISTS verification_codes (
 
 ### Running Backend Server
 ```bash
-# Activate Python virtual environment
+# Option A: From root directory using PowerShell
 .\.venv\Scripts\Activate.ps1
-
-# Run FastAPI server with auto-reload
-python -m uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
+uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 ### Running Frontend Application
 ```bash
+# Option A: Run from root directory using --prefix
+npm --prefix frontend run dev
+
+# Option B: Run from inside the frontend directory
 cd frontend
 npm run dev
 # Accessible at http://localhost:3000
 ```
 
-### Running Complete Pytest Suite
+### Running Full Automated Test Suites
 ```bash
-python -m pytest tests/ -v
-# Executes 35+ automated tests verifying health, auth, RBAC, DAGs, and agents.
+# Backend Pytest Suite (25+ tests: schemas, domain classifier, PDF export)
+pytest tests/ -v
+
+# Frontend Automated Invariant Suites
+npm --prefix frontend run test:home       # 7/7 PASS (64px rail, 820px layout, contrast)
+npm --prefix frontend run test:pipeline   # 33/33 PASS (PRD FSM & Invariants)
+npm --prefix frontend run test:viewmodel  # 24/24 PASS (Reactive view-model & fixtures)
+npm --prefix frontend run check:tokens    # PASS (CSS token baseline check)
+npm --prefix frontend run test:typography # 33/33 PASS (Self-hosted font pairings)
 ```
