@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "node scripts/test-home-refinement.mjs && node scripts/test-pipeline-stage.mjs && node scripts/test-research-view-model.mjs && node scripts/test-typography.mjs",
     "check:tokens": "node scripts/check-locked-tokens.mjs",
     "test:home": "node scripts/test-home-refinement.mjs",
     "test:pipeline": "node scripts/test-pipeline-stage.mjs",

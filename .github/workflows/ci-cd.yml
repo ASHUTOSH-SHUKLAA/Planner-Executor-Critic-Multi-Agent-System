@@ -31,10 +31,12 @@ jobs:
 
       - name: Run Pytest test suite (Deterministic Unit & Component Tests)
         run: |
-          pytest -v -k "not live"
+          python -m pytest -v -k "not live"
         env:
+          PYTHONPATH: "."
           DATABASE_PATH: ":memory:"
           JWT_SECRET: "ci-testing-secret-key-32chars-minimum!!"
+          GEMINI_API_KEY: "dummy-key-for-deterministic-ci-testing"
 
   frontend-checks:
     name: Frontend Tests, Linting & Build
