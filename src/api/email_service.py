@@ -63,13 +63,24 @@ class IPv4SMTP_SSL(smtplib.SMTP_SSL):
         return self.context.wrap_socket(raw_sock, server_hostname=self._host)
 
 
-def is_smtp_configured() -> bool:
-    """Check if outbound SMTP server credentials are provided in environment."""
+def is_email_service_configured() -> bool:
+    """Check if any outbound email provider (Resend, Brevo, SendGrid, or SMTP) is provided in environment."""
     load_dotenv()
+    if os.getenv("RESEND_API_KEY", "").strip():
+        return True
+    if os.getenv("BREVO_API_KEY", "").strip():
+        return True
+    if os.getenv("SENDGRID_API_KEY", "").strip():
+        return True
     host = os.getenv("SMTP_HOST", "").strip()
     user = os.getenv("SMTP_USER", "").strip()
     password = os.getenv("SMTP_PASSWORD", "").strip()
     return bool(host and user and password)
+
+
+def is_smtp_configured() -> bool:
+    """Backward-compatible alias for is_email_service_configured."""
+    return is_email_service_configured()
 
 
 def generate_otp_email_html(code: str, user_name: Optional[str] = None) -> str:
@@ -189,6 +200,118 @@ def generate_otp_email_text(code: str, user_name: Optional[str] = None) -> str:
     )
 
 
+def _send_via_resend(to_email: str, code: str, user_name: Optional[str] = None) -> Tuple[bool, str]:
+    """Dispatches verification code via Resend HTTPS REST API (Port 443 - never blocked by cloud container firewalls)."""
+    api_key = os.getenv("RESEND_API_KEY", "").strip()
+    if not api_key:
+        return False, "RESEND_API_KEY is not set"
+
+    from_email = os.getenv("RESEND_FROM_EMAIL", "").strip() or "Synora <onboarding@resend.dev>"
+    url = "https://api.resend.com/emails"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "from": from_email,
+        "to": [to_email],
+        "subject": f"Your Synora Verification Code: {code}",
+        "html": generate_otp_email_html(code, user_name),
+        "text": generate_otp_email_text(code, user_name),
+    }
+
+    try:
+        import httpx
+        with httpx.Client(timeout=10.0) as client:
+            resp = client.post(url, headers=headers, json=payload)
+            if resp.status_code in (200, 201):
+                logger.info(f"Verification OTP successfully sent via Resend HTTPS API to {to_email}")
+                return True, f"Verification code successfully sent to {to_email} via Resend"
+            else:
+                err_detail = resp.text
+                logger.warning(f"Resend API returned status {resp.status_code}: {err_detail}")
+                return False, f"Resend API error ({resp.status_code}): {err_detail}"
+    except Exception as e:
+        logger.warning(f"Resend HTTPS request failed: {e}")
+        return False, f"Resend connection failed: {e}"
+
+
+def _send_via_brevo(to_email: str, code: str, user_name: Optional[str] = None) -> Tuple[bool, str]:
+    """Dispatches verification code via Brevo (Sendinblue) HTTPS REST API (Port 443)."""
+    api_key = os.getenv("BREVO_API_KEY", "").strip()
+    if not api_key:
+        return False, "BREVO_API_KEY is not set"
+
+    from_email = os.getenv("BREVO_FROM_EMAIL", "").strip() or os.getenv("SMTP_FROM_EMAIL", "auth@triadflow.ai").strip()
+    from_name = os.getenv("SMTP_FROM_NAME", "Synora Security").strip()
+    url = "https://api.brevo.com/v3/smtp/email"
+    headers = {
+        "api-key": api_key,
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "sender": {"name": from_name, "email": from_email},
+        "to": [{"email": to_email}],
+        "subject": f"Your Synora Verification Code: {code}",
+        "htmlContent": generate_otp_email_html(code, user_name),
+        "textContent": generate_otp_email_text(code, user_name),
+    }
+
+    try:
+        import httpx
+        with httpx.Client(timeout=10.0) as client:
+            resp = client.post(url, headers=headers, json=payload)
+            if resp.status_code in (200, 201, 202):
+                logger.info(f"Verification OTP successfully sent via Brevo HTTPS API to {to_email}")
+                return True, f"Verification code successfully sent to {to_email} via Brevo"
+            else:
+                err_detail = resp.text
+                logger.warning(f"Brevo API returned status {resp.status_code}: {err_detail}")
+                return False, f"Brevo API error ({resp.status_code}): {err_detail}"
+    except Exception as e:
+        logger.warning(f"Brevo HTTPS request failed: {e}")
+        return False, f"Brevo connection failed: {e}"
+
+
+def _send_via_sendgrid(to_email: str, code: str, user_name: Optional[str] = None) -> Tuple[bool, str]:
+    """Dispatches verification code via SendGrid HTTPS REST API (Port 443)."""
+    api_key = os.getenv("SENDGRID_API_KEY", "").strip()
+    if not api_key:
+        return False, "SENDGRID_API_KEY is not set"
+
+    from_email = os.getenv("SENDGRID_FROM_EMAIL", "").strip() or os.getenv("SMTP_FROM_EMAIL", "auth@triadflow.ai").strip()
+    from_name = os.getenv("SMTP_FROM_NAME", "Synora Security").strip()
+    url = "https://api.sendgrid.com/v3/mail/send"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "personalizations": [{"to": [{"email": to_email}]}],
+        "from": {"email": from_email, "name": from_name},
+        "subject": f"Your Synora Verification Code: {code}",
+        "content": [
+            {"type": "text/plain", "value": generate_otp_email_text(code, user_name)},
+            {"type": "text/html", "value": generate_otp_email_html(code, user_name)},
+        ],
+    }
+
+    try:
+        import httpx
+        with httpx.Client(timeout=10.0) as client:
+            resp = client.post(url, headers=headers, json=payload)
+            if resp.status_code in (200, 202):
+                logger.info(f"Verification OTP successfully sent via SendGrid HTTPS API to {to_email}")
+                return True, f"Verification code successfully sent to {to_email} via SendGrid"
+            else:
+                err_detail = resp.text
+                logger.warning(f"SendGrid API returned status {resp.status_code}: {err_detail}")
+                return False, f"SendGrid API error ({resp.status_code}): {err_detail}"
+    except Exception as e:
+        logger.warning(f"SendGrid HTTPS request failed: {e}")
+        return False, f"SendGrid connection failed: {e}"
+
+
 def send_verification_email(
     to_email: str,
     code: str,
@@ -196,11 +319,32 @@ def send_verification_email(
 ) -> Tuple[bool, str]:
     """
     Dispatches a verification email containing the 6-digit OTP code to the recipient.
-    Forces IPv4 connections to avoid [Errno 101] Network is unreachable on cloud container runtimes.
-    Automatically tries port 587 (STARTTLS) and falls back to port 465 (SSL) if blocked.
+    Priority 1: HTTPS Email APIs (Resend, Brevo, SendGrid over port 443 - immune to Render/cloud SMTP port blocks).
+    Priority 2: Standard IPv4 SMTP (Gmail, Outlook, custom SMTP with port 587/465 fallback).
     Returns (success: bool, status_message: str).
     """
     load_dotenv()
+
+    # 1. Check HTTPS email services first (ideal for cloud container hosts like Render free tier)
+    if os.getenv("RESEND_API_KEY", "").strip():
+        ok, msg = _send_via_resend(to_email, code, user_name)
+        if ok:
+            return True, msg
+        logger.warning(f"Resend attempt failed: {msg}. Falling back to next configured provider...")
+
+    if os.getenv("BREVO_API_KEY", "").strip():
+        ok, msg = _send_via_brevo(to_email, code, user_name)
+        if ok:
+            return True, msg
+        logger.warning(f"Brevo attempt failed: {msg}. Falling back to next configured provider...")
+
+    if os.getenv("SENDGRID_API_KEY", "").strip():
+        ok, msg = _send_via_sendgrid(to_email, code, user_name)
+        if ok:
+            return True, msg
+        logger.warning(f"SendGrid attempt failed: {msg}. Falling back to next configured provider...")
+
+    # 2. Check Standard SMTP
     host = os.getenv("SMTP_HOST", "").strip()
     configured_port = int(os.getenv("SMTP_PORT", "587"))
     user = os.getenv("SMTP_USER", "").strip()
@@ -212,10 +356,10 @@ def send_verification_email(
 
     if not host or not user or not password:
         logger.info(
-            f"SMTP not configured (SMTP_HOST/USER/PASSWORD missing). "
+            f"No outbound email service configured (set RESEND_API_KEY or SMTP_HOST/USER/PASSWORD). "
             f"Verification OTP for {to_email} logged to terminal: >>> {code} <<<"
         )
-        return False, "SMTP server not configured in environment"
+        return False, "Outbound email service is not configured in environment"
 
     msg = MIMEMultipart("alternative")
     msg["Subject"] = f"Your Synora Verification Code: {code}"
@@ -258,6 +402,23 @@ def send_verification_email(
             last_error = e
             logger.warning(f"SMTP dispatch attempt on port {port} failed: {e}. Trying alternate port if available...")
 
-    error_msg = f"Failed to send email via SMTP to {to_email}: {str(last_error)}"
+    # Detect cloud network firewall block (Render Free Tier blocks ports 25, 465, 587)
+    err_str = str(last_error)
+    is_network_blocked = (
+        "[Errno 101]" in err_str
+        or "Network is unreachable" in err_str
+        or "ETIMEDOUT" in err_str
+        or "timed out" in err_str.lower()
+    )
+
+    if is_network_blocked:
+        error_msg = (
+            f"Cloud host firewall blocked outbound SMTP (Render Free Tier blocks ports 25, 465, and 587). "
+            f"Code {code} was logged to your server console. "
+            f"To deliver directly to your inbox on Render, add a free RESEND_API_KEY in your Render environment variables."
+        )
+    else:
+        error_msg = f"Failed to send email via SMTP to {to_email}: {err_str}"
+
     logger.error(error_msg)
     return False, error_msg

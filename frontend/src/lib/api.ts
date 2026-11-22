@@ -155,6 +155,7 @@ export interface SendCodeResult {
   message: string;
   email: string;
   smtp_sent?: boolean;
+  warning_type?: string;
   dev_code?: string;
 }
 

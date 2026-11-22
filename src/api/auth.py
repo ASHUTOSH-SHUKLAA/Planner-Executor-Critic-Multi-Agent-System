@@ -122,7 +122,8 @@ class SendCodeResponse(BaseModel):
     message: str
     email: str
     smtp_sent: bool = False
-    dev_code: Optional[str] = None  # Returned strictly during automated test runs (pytest)
+    warning_type: Optional[str] = None
+    dev_code: Optional[str] = None  # Returned strictly during automated test runs (pytest) or explicit dev mode
 
 
 class VerifyCodeRequest(BaseModel):
@@ -256,22 +257,36 @@ def send_auth_code(req: SendCodeRequest):
     print(f"[AUTH SERVICE] Code: >>> {code} <<< (Valid for 10 minutes)")
     print(f"[AUTH SERVICE] ==================================================\n")
 
-    # dev_code is accessible strictly during automated tests (pytest)
-    is_test_env = bool(os.getenv("PYTEST_CURRENT_TEST") or os.getenv("TESTING", "").lower() in ("true", "1"))
+    # dev_code is accessible strictly during automated tests (pytest) or when EXPOSE_OTP_IN_RESPONSE is enabled
+    is_test_env = bool(
+        os.getenv("PYTEST_CURRENT_TEST")
+        or os.getenv("TESTING", "").lower() in ("true", "1")
+        or os.getenv("EXPOSE_OTP_IN_RESPONSE", "").lower() in ("true", "1")
+    )
     returned_dev_code = code if is_test_env else None
 
     if smtp_sent:
         response_msg = f"Verification code sent to {valid_email}. Please check your inbox."
+        warning_type = None
+    elif "Render Free Tier blocks" in smtp_detail or "Network is unreachable" in smtp_detail or "[Errno 101]" in smtp_detail:
+        response_msg = (
+            f"Render Free Tier blocks outbound SMTP ports (587/465). "
+            f"Check your Render server logs for your OTP code, or set RESEND_API_KEY in Render dashboard for free HTTPS delivery."
+        )
+        warning_type = "host_smtp_blocked"
     elif is_smtp_configured():
-        response_msg = f"Verification code generated, but SMTP dispatch encountered an issue: {smtp_detail}. Check server logs."
+        response_msg = f"Verification code generated, but email dispatch failed: {smtp_detail}. Check server logs."
+        warning_type = "smtp_error"
     else:
-        response_msg = f"Verification code generated. Outbound SMTP is not configured in .env (check server console for OTP or configure SMTP settings)."
+        response_msg = f"Outbound email is not configured in .env. Check server console for the OTP code."
+        warning_type = "smtp_unconfigured"
 
     return SendCodeResponse(
         status="success",
         message=response_msg,
         email=valid_email,
         smtp_sent=smtp_sent,
+        warning_type=warning_type,
         dev_code=returned_dev_code,
     )
 

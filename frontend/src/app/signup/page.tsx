@@ -20,6 +20,8 @@ export default function SignupPage() {
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [smtpSent, setSmtpSent] = useState<boolean>(true);
+  const [serverNotice, setServerNotice] = useState<string | null>(null);
+  const [devCode, setDevCode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [resendCountdown, setResendCountdown] = useState(0);
@@ -61,6 +63,11 @@ export default function SignupPage() {
     try {
       const res = await requestCode(cleanEmail, cleanName);
       setSmtpSent(res.smtp_sent ?? true);
+      setServerNotice(res.message || null);
+      if (res.dev_code) {
+        setDevCode(res.dev_code);
+        setCode(res.dev_code);
+      }
       setStep("code");
       setResendCountdown(60);
     } catch (err: any) {
@@ -227,8 +234,18 @@ export default function SignupPage() {
                 <div className="mt-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-700 dark:text-amber-300 flex items-start gap-2">
                   <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
                   <div className="leading-relaxed">
-                    Outbound SMTP is not configured in <code className="px-1 py-0.5 rounded bg-amber-500/15 font-mono">.env</code>. Check your server terminal for the OTP, or configure Gmail SMTP in <code className="px-1 py-0.5 rounded bg-amber-500/15 font-mono">.env</code> to deliver codes directly to your inbox.
+                    {serverNotice || (
+                      <>
+                        Outbound email delivery is unavailable or blocked by the cloud host. Check your server console for the OTP code, or configure an HTTPS email API (e.g. Resend) in your environment.
+                      </>
+                    )}
                   </div>
+                </div>
+              )}
+
+              {devCode && (
+                <div className="mt-2.5 p-2 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-xs text-indigo-700 dark:text-indigo-300 font-mono text-center">
+                  OTP code: <span className="font-bold tracking-widest">{devCode}</span>
                 </div>
               )}
             </div>
