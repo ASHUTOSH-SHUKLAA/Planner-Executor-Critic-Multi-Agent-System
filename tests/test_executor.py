@@ -119,11 +119,11 @@ def test_execute_workflow_step_mocked():
 
 
 @pytest.mark.skipif(
-    not os.getenv("GROQ_API_KEY"),
-    reason="Live Groq API test requires GROQ_API_KEY",
+    not os.getenv("GEMINI_API_KEY"),
+    reason="Live Gemini API test requires GEMINI_API_KEY",
 )
 def test_live_executor_step_execution():
-    """Live integration test: verifies real Groq model produces structured StepOutput."""
+    """Live integration test: verifies real Gemini model produces structured StepOutput."""
     executor = ExecutorAgent()
     state = WorkflowState(task="Analyze Container Orchestration")
 

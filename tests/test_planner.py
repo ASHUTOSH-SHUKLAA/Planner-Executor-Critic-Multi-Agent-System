@@ -60,11 +60,11 @@ def test_plan_workflow_state_transition():
 
 
 @pytest.mark.skipif(
-    not os.getenv("GROQ_API_KEY"),
-    reason="Live Groq API test requires GROQ_API_KEY",
+    not os.getenv("GEMINI_API_KEY"),
+    reason="Live Gemini API test requires GEMINI_API_KEY",
 )
 def test_live_planner_dag_generation():
-    """Live integration test: verifies real Groq model generates a valid DAG."""
+    """Live integration test: verifies real Gemini model generates a valid DAG."""
     planner = PlannerAgent()
     task = (
         "Compare SQL vs NoSQL databases for a high-throughput social media application "

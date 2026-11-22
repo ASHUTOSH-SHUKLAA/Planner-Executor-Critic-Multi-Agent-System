@@ -110,11 +110,11 @@ def test_orchestration_state_transitions_mocked():
 
 
 @pytest.mark.skipif(
-    not os.getenv("GROQ_API_KEY"),
-    reason="Live Groq API test requires GROQ_API_KEY",
+    not os.getenv("GEMINI_API_KEY"),
+    reason="Live Gemini API test requires GEMINI_API_KEY",
 )
 def test_live_end_to_end_sequential_workflow():
-    """Live integration test: execute full end-to-end workflow on Groq."""
+    """Live integration test: execute full end-to-end workflow on Gemini."""
     engine = OrchestrationEngine(verbose=True)
     task = "Explain two key differences between synchronous and asynchronous programming in Python."
 

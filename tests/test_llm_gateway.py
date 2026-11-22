@@ -1,5 +1,5 @@
 """
-Unit tests for LLM Gateway cost calculation, initialization, and error handling.
+Unit tests for LLM Gateway cost calculation, initialization, and error handling with Google Gemini.
 """
 
 import pytest
@@ -8,30 +8,29 @@ from src.llm.client import LLMGateway, MODEL_PRICING
 
 def test_missing_api_key_raises_error(monkeypatch):
     """Verify that omitting the API key raises an instructive error."""
-    monkeypatch.delenv("GROQ_API_KEY", raising=False)
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     with pytest.raises(ValueError) as exc:
         LLMGateway(api_key=None)
-    assert "is not set" in str(exc.value)
+    assert "GEMINI_API_KEY is not set" in str(exc.value)
 
 
-def test_cost_calculation_llama_70b():
-    """Verify that token pricing math matches published rates."""
-    gateway = LLMGateway(api_key="gsk_dummy_key_for_testing")
-    
-    # 1,000 prompt tokens @ $0.59/M = $0.00059
-    # 2,000 completion tokens @ $0.79/M = $0.00158
-    # Total = 0.002170
-    cost = gateway._calculate_cost("llama-3.3-70b-versatile", 1000, 2000)
-    assert cost == 0.002170
-
-
-def test_cost_calculation_llama_8b():
-    """Verify 8B pricing math."""
-    gateway = LLMGateway(api_key="gsk_dummy_key_for_testing")
+def test_cost_calculation_gemini_flash_lite():
+    """Verify that token pricing math matches published Gemini Flash Lite rates."""
+    gateway = LLMGateway(api_key="dummy_gemini_key_for_testing")
     
     # 1,000 prompt tokens @ $0.05/M = $0.00005
-    # 1,000 completion tokens @ $0.08/M = $0.00008
-    # Total = 0.000130
-    cost = gateway._calculate_cost("llama-3.1-8b-instant", 1000, 1000)
-    assert cost == 0.000130
+    # 2,000 completion tokens @ $0.20/M = $0.00040
+    # Total = 0.000450
+    cost = gateway._calculate_cost("gemini-flash-lite-latest", 1000, 2000)
+    assert cost == 0.000450
+
+
+def test_cost_calculation_gemini_pro():
+    """Verify Gemini Pro pricing math."""
+    gateway = LLMGateway(api_key="dummy_gemini_key_for_testing")
+    
+    # 1,000 prompt tokens @ $1.25/M = $0.00125
+    # 1,000 completion tokens @ $5.00/M = $0.00500
+    # Total = 0.006250
+    cost = gateway._calculate_cost("gemini-2.5-pro", 1000, 1000)
+    assert cost == 0.006250

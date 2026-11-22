@@ -93,6 +93,24 @@ def test_auth_registration_and_login_flow():
     )
     assert me_response.status_code == 200
     assert me_response.json()["email"] == test_email
+    assert me_response.json()["name"] == "Lead AI Engineer"
+
+    # 6. Update user display name via PUT /api/auth/me
+    update_response = client.put(
+        "/api/auth/me",
+        json={"name": "Principal AI Architect"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert update_response.status_code == 200
+    assert update_response.json()["name"] == "Principal AI Architect"
+
+    # 7. Verify /me returns updated name
+    verify_me = client.get(
+        "/api/auth/me",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert verify_me.status_code == 200
+    assert verify_me.json()["name"] == "Principal AI Architect"
 
 
 def test_email_authenticity_verification():

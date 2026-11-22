@@ -101,8 +101,8 @@ def test_threshold_enforcement_forces_reject():
 
 
 @pytest.mark.skipif(
-    not os.getenv("GROQ_API_KEY"),
-    reason="Live Groq API test requires GROQ_API_KEY",
+    not os.getenv("GEMINI_API_KEY"),
+    reason="Live Gemini API test requires GEMINI_API_KEY",
 )
 def test_live_critic_detects_genuine_executor_mistake():
     """
