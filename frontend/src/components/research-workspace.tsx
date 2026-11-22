@@ -1402,7 +1402,7 @@ export function ResearchWorkspace() {
                 {/* Hero Section (Only shown when not running) */}
                 {!isRunning && (
                   <div className="workspace-home-hero flex flex-col items-center text-center">
-                    <BrandMark className="workspace-home-brand-mark h-10 w-10 shrink-0" />
+                    <BrandMark className="workspace-home-brand-mark hidden sm:block h-10 w-10 shrink-0" />
                     <h1 className="workspace-hero-title">
                       Start with a <span className="text-gradient-brand">question</span>.
                     </h1>
@@ -1480,31 +1480,9 @@ export function ResearchWorkspace() {
                   </div>
 
                   {/* Integrated Composer Controls Bar */}
-                  <div className="composer-controls-row flex items-center justify-between gap-2">
-                    {/* Left Controls */}
-                    <div className="composer-controls-left flex items-center gap-2">
-                      {/* Hidden file input for document attachment */}
-                      <input
-                        type="file"
-                        ref={fileInputRef}
-                        onChange={handleFileUpload}
-                        accept=".pdf,.txt,.md,.json,.csv,.doc,.docx"
-                        className="hidden"
-                        aria-hidden="true"
-                      />
-
-                      {/* Attach button */}
-                      <WorkspaceIconButton
-                        label="Attach document"
-                        type="button"
-                        title="Attach document or dataset (.pdf, .txt, .md, .csv)"
-                        className="composer-attach-button cursor-pointer"
-                        onClick={() => fileInputRef.current?.click()}
-                      >
-                        <Plus className="h-5 w-5" strokeWidth={1.5} />
-                      </WorkspaceIconButton>
-
-                      {/* Depth Segmented Control */}
+                  <div className="composer-controls-row">
+                    {/* Research Depth Segmented Control: Row 1 on mobile, integrated into left controls on desktop */}
+                    <div className="composer-depth-wrapper">
                       <SegmentedControl label="Research depth" className="composer-mode-control">
                         <button
                           type="button"
@@ -1548,24 +1526,50 @@ export function ResearchWorkspace() {
                       </SegmentedControl>
                     </div>
 
-                    {/* Right Controls */}
-                    <div className="composer-controls-right flex items-center gap-2">
-                      {/* Model Config Dropdown */}
-                      <div className="relative inline-block text-left">
-                        <button
-                          ref={modelButtonRef}
+                    {/* Actions Toolbar: Row 2 on mobile, flattened via display: contents on desktop */}
+                    <div className="composer-actions-bar">
+                      {/* Left Actions: Attach File */}
+                      <div className="composer-controls-left">
+                        {/* Hidden file input for document attachment */}
+                        <input
+                          type="file"
+                          ref={fileInputRef}
+                          onChange={handleFileUpload}
+                          accept=".pdf,.txt,.md,.json,.csv,.doc,.docx"
+                          className="hidden"
+                          aria-hidden="true"
+                        />
+
+                        {/* Attach button */}
+                        <WorkspaceIconButton
+                          label="Attach document"
                           type="button"
-                          onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)}
-                          className={`composer-model-button inline-flex items-center gap-1.5 px-3 rounded-full text-xs font-semibold transition-all cursor-pointer ${isModelDropdownOpen ? "is-open" : ""
-                            }`}
-                          title={`Select reasoning model (currently: ${selectedModelObj.name})`}
-                          aria-expanded={isModelDropdownOpen}
-                          aria-haspopup="listbox"
+                          title="Attach document or dataset (.pdf, .txt, .md, .csv)"
+                          className="composer-attach-button cursor-pointer"
+                          onClick={() => fileInputRef.current?.click()}
                         >
-                          <Cpu className="h-3.5 w-3.5 text-[var(--accent)]" strokeWidth={1.5} />
-                          <span>{selectedModelObj.name}</span>
-                          <ChevronDown className={`h-3 w-3 opacity-60 transition-transform duration-200 ${isModelDropdownOpen ? "rotate-180" : ""}`} />
-                        </button>
+                          <Plus className="h-5 w-5" strokeWidth={1.5} />
+                        </WorkspaceIconButton>
+                      </div>
+
+                      {/* Right Controls */}
+                      <div className="composer-controls-right flex items-center gap-2">
+                        {/* Model Config Dropdown */}
+                        <div className="relative inline-block text-left">
+                          <button
+                            ref={modelButtonRef}
+                            type="button"
+                            onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)}
+                            className={`composer-model-button inline-flex items-center gap-1.5 px-3 rounded-full text-xs font-semibold transition-all cursor-pointer ${isModelDropdownOpen ? "is-open" : ""
+                              }`}
+                            title={`Select reasoning model (currently: ${selectedModelObj.name})`}
+                            aria-expanded={isModelDropdownOpen}
+                            aria-haspopup="listbox"
+                          >
+                            <Cpu className="h-3.5 w-3.5 text-[var(--accent)] shrink-0" strokeWidth={1.5} />
+                            <span className="truncate max-w-[95px] xs:max-w-[125px] sm:max-w-none">{selectedModelObj.name}</span>
+                            <ChevronDown className={`h-3 w-3 opacity-60 shrink-0 transition-transform duration-200 ${isModelDropdownOpen ? "rotate-180" : ""}`} />
+                          </button>
 
                         {isModelDropdownOpen && mounted && typeof document !== "undefined" && createPortal(
                           <div
@@ -1654,7 +1658,8 @@ export function ResearchWorkspace() {
                       </button>
                     </div>
                   </div>
-                </Composer>
+                </div>
+              </Composer>
               </div>
 
               {/* SUGGESTED INQUIRIES: Clean, single-tier, modern 4-card grid */}
