@@ -1,0 +1,112 @@
+name: Synora CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-checks:
+    name: Backend Tests & Linting
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Pytest test suite (Deterministic Unit & Component Tests)
+        run: |
+          pytest -v -k "not live"
+        env:
+          DATABASE_PATH: ":memory:"
+          JWT_SECRET: "ci-testing-secret-key-32chars-minimum!!"
+
+  frontend-checks:
+    name: Frontend Tests, Linting & Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Run Design Token Verification
+        working-directory: frontend
+        run: npm run check:tokens
+
+      - name: Run Layout & Typography Unit Tests
+        working-directory: frontend
+        run: npm test
+
+      - name: TypeScript Type Check
+        working-directory: frontend
+        run: npx tsc --noEmit
+
+      - name: Production Next.js Build
+        working-directory: frontend
+        run: npm run build
+        env:
+          NEXT_PUBLIC_API_URL: "https://synora-backend.onrender.com"
+
+  docker-validation:
+    name: Docker Image Build Validation
+    runs-on: ubuntu-latest
+    needs: [backend-checks, frontend-checks]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image (dry-run validation)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          tags: synora/backend:test
+
+  deploy-render:
+    name: Deploy to Render (Web Service & Worker)
+    needs: [docker-validation]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render Backend Web Service Deploy
+        if: ${{ env.RENDER_BACKEND_DEPLOY_HOOK != '' }}
+        run: |
+          curl -X POST "${{ secrets.RENDER_BACKEND_DEPLOY_HOOK }}"
+        env:
+          RENDER_BACKEND_DEPLOY_HOOK: ${{ secrets.RENDER_BACKEND_DEPLOY_HOOK }}
+
+      - name: Trigger Render Background Worker Deploy
+        if: ${{ env.RENDER_WORKER_DEPLOY_HOOK != '' }}
+        run: |
+          curl -X POST "${{ secrets.RENDER_WORKER_DEPLOY_HOOK }}"
+        env:
+          RENDER_WORKER_DEPLOY_HOOK: ${{ secrets.RENDER_WORKER_DEPLOY_HOOK }}

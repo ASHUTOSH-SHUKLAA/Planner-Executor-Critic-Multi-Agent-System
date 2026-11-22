@@ -1,0 +1,86 @@
+services:
+  # ============================================================
+  # 1. FastAPI Web Service (REST API & Auth & Job Dispatcher)
+  # ============================================================
+  - type: web
+    name: synora-backend
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    region: oregon
+    healthCheckPath: /api/health
+    numInstances: 1
+    envVars:
+      - key: PORT
+        value: "8000"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: synora-postgres
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: synora-redis
+          property: connectionString
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: JWT_SECRET
+        generateCrypto: true
+      - key: CORS_ORIGINS
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_FROM_EMAIL
+        sync: false
+      - key: SMTP_FROM_NAME
+        value: "Synora"
+
+  # ============================================================
+  # 2. Render Background Worker (Autonomous Multi-Agent Engine)
+  # ============================================================
+  - type: worker
+    name: synora-worker
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerCommand: python -m src.queue.worker
+    plan: starter
+    region: oregon
+    numInstances: 1
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: synora-postgres
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: synora-redis
+          property: connectionString
+      - key: GEMINI_API_KEY
+        sync: false
+
+  # ============================================================
+  # 3. Render Key Value (Redis-Compatible Job Queue & Pub/Sub)
+  # ============================================================
+  - type: redis
+    name: synora-redis
+    plan: starter
+    region: oregon
+    maxmemoryPolicy: noeviction
+
+databases:
+  # ============================================================
+  # 4. Render Postgres Database (PostgreSQL 16)
+  # ============================================================
+  - name: synora-postgres
+    databaseName: synora
+    user: synora
+    plan: starter
+    region: oregon
+    postgresMajorVersion: "16"

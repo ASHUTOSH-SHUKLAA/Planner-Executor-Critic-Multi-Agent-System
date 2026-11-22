@@ -1,26 +1,65 @@
-# Virtual Environment
+# Virtual Environments
 .venv/
 venv/
 ENV/
+env/
 
-# Byte-compiled / optimized files
+# Byte-compiled / optimized Python files
 __pycache__/
 *.py[cod]
 *$py.class
+*.so
 
 # Environment variables & secrets
 .env
+.env.local
+.env.*.local
+!.env.example
+
+# Databases & local persistent stores
+*.db
+*.sqlite
+*.sqlite3
+app.db
+triadflow_test.db
 
 # Testing & Coverage
 .pytest_cache/
 .coverage
 htmlcov/
+.hypothesis/
 
-# Logs & temporary files
+# Logs, scratch scripts & temporary artifacts
 *.log
 *.jsonl
 scratch/
+logs/
+test_reports/
 powershell.bat
-app.db
+frontend/powershell.bat
 
-.env
+# IDE & Editor files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.vim/
+
+# OS specific files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+
+# Frontend Dependencies & Build Output
+node_modules/
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/build/
+.vercel/
+frontend/.vercel/
+frontend/.turbo/
+*.tsbuildinfo
+next-env.d.ts
+frontend/scripts/.test-build/
+frontend/scripts/.test-build-vm/
