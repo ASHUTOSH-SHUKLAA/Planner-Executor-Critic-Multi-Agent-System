@@ -63,7 +63,8 @@ TRUSTED_AUTHENTIC_DOMAINS = {
     "icloud.com", "me.com", "mac.com", "proton.me", "protonmail.com",
     "zoho.com", "zohomail.in", "aol.com", "fastmail.com", "gmx.com",
     "mail.com", "yandex.com", "tutanota.com", "tutamail.com", "hey.com",
-    "example.com", "example.org", "example.net", "triadflow.ai", "localhost",
+    "example.com", "example.org", "example.net",
+    "triadflow.ai", "triadflow.io", "triadflow.com", "triadflow.org", "localhost",
 }
 
 
@@ -120,7 +121,8 @@ class SendCodeResponse(BaseModel):
     status: str = "success"
     message: str
     email: str
-    dev_code: Optional[str] = None  # Returned to facilitate local verification and developer testing
+    smtp_sent: bool = False
+    dev_code: Optional[str] = None  # Returned strictly during automated test runs (pytest)
 
 
 class VerifyCodeRequest(BaseModel):
@@ -204,6 +206,21 @@ def require_admin(current_user: Dict[str, Any] = Depends(get_current_user)) -> D
     return current_user
 
 
+def is_admin_email_address(email: str) -> bool:
+    """
+    Determines if an email address qualifies for administrative governance:
+    1. Explicitly listed in the ADMIN_EMAILS environment variable (comma-separated).
+    2. Default enterprise admin addresses (admin@triadflow.ai, admin@triadflow.io, admin@triadflow.com, or admin@triadflow.*).
+    """
+    cleaned = email.strip().lower()
+    env_admins = {e.strip().lower() for e in os.getenv("ADMIN_EMAILS", "").split(",") if e.strip()}
+    if cleaned in env_admins:
+        return True
+    if cleaned in ("admin@triadflow.ai", "admin@triadflow.io", "admin@triadflow.com") or cleaned.startswith("admin@triadflow."):
+        return True
+    return False
+
+
 from src.api.email_service import send_verification_email, is_smtp_configured
 
 # --- Endpoints ---
@@ -239,7 +256,7 @@ def send_auth_code(req: SendCodeRequest):
     print(f"[AUTH SERVICE] Code: >>> {code} <<< (Valid for 10 minutes)")
     print(f"[AUTH SERVICE] ==================================================\n")
 
-    # dev_code is strictly withheld in production and only accessible during automated test runner execution
+    # dev_code is accessible strictly during automated tests (pytest)
     is_test_env = bool(os.getenv("PYTEST_CURRENT_TEST") or os.getenv("TESTING", "").lower() in ("true", "1"))
     returned_dev_code = code if is_test_env else None
 
@@ -254,6 +271,7 @@ def send_auth_code(req: SendCodeRequest):
         status="success",
         message=response_msg,
         email=valid_email,
+        smtp_sent=smtp_sent,
         dev_code=returned_dev_code,
     )
 
@@ -274,9 +292,11 @@ def verify_auth_code(req: VerifyCodeRequest):
     user = get_user_by_email(valid_email)
     from src.api.audit_logger import log_user_event
 
+    is_admin = is_admin_email_address(valid_email)
+
     if not user:
-        # Determine initial role: admin@triadflow.ai is system administrator, others are researchers
-        role = "admin" if valid_email == "admin@triadflow.ai" else "user"
+        # Determine initial role: admin addresses are system administrators, others are researchers
+        role = "admin" if is_admin else "user"
         display_name = req.name.strip() if req.name and req.name.strip() else valid_email.split("@")[0].replace(".", " ").title()
         dummy_hash = hash_password(secrets.token_urlsafe(32))
         user = create_user(email=valid_email, name=display_name, password_hash=dummy_hash, role=role)
@@ -288,17 +308,28 @@ def verify_auth_code(req: VerifyCodeRequest):
             details=f"Passwordless user registered: '{user['name']}'",
         )
     else:
+        from src.api.database import set_user_role, update_user_name
+        if is_admin and user.get("role") != "admin":
+            set_user_role(user["id"], "admin")
+            user["role"] = "admin"
+
+        if req.name and req.name.strip():
+            submitted_name = req.name.strip()
+            if submitted_name != user.get("name"):
+                update_user_name(user["id"], submitted_name)
+                user["name"] = submitted_name
+
         user_role = user.get("role", "user")
         log_user_event(
             action="USER_LOGIN",
             user_id=user["id"],
             email=user["email"],
             role=user_role,
-            details="Passwordless OTP authentication verified successfully",
+            details=f"Passwordless OTP authentication verified successfully for '{user['name']}'",
         )
 
     user_role = user.get("role", "user")
-    token = create_access_token(data={"sub": str(user["id"]), "email": user["email"], "role": user_role})
+    token = create_access_token(data={"sub": str(user["id"]), "email": user["email"], "name": user["name"], "role": user_role})
     return TokenResponse(
         access_token=token,
         user=UserResponse(id=user["id"], name=user["name"], email=user["email"], role=user_role),
@@ -313,7 +344,8 @@ def register(req: RegisterRequest):
         raise HTTPException(status_code=400, detail="An account with this email already exists.")
 
     pw_hash = hash_password(req.password)
-    user = create_user(email=valid_email, name=req.name, password_hash=pw_hash, role="user")
+    role = "admin" if is_admin_email_address(valid_email) else "user"
+    user = create_user(email=valid_email, name=req.name, password_hash=pw_hash, role=role)
 
     from src.api.audit_logger import log_user_event
     log_user_event(
@@ -324,7 +356,7 @@ def register(req: RegisterRequest):
         details=f"New user registered: '{user['name']}'",
     )
 
-    token = create_access_token(data={"sub": str(user["id"]), "email": user["email"], "role": user["role"]})
+    token = create_access_token(data={"sub": str(user["id"]), "email": user["email"], "name": user["name"], "role": user["role"]})
     return TokenResponse(
         access_token=token,
         user=UserResponse(id=user["id"], name=user["name"], email=user["email"], role=user["role"]),
@@ -337,6 +369,11 @@ def login(req: LoginRequest):
     if not user or not verify_password(req.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid email or password.")
 
+    from src.api.database import set_user_role
+    if is_admin_email_address(user["email"]) and user.get("role") != "admin":
+        set_user_role(user["id"], "admin")
+        user["role"] = "admin"
+
     user_role = user.get("role", "user")
 
     from src.api.audit_logger import log_user_event
@@ -345,10 +382,10 @@ def login(req: LoginRequest):
         user_id=user["id"],
         email=user["email"],
         role=user_role,
-        details="User authenticated successfully",
+        details="User authenticated with password",
     )
 
-    token = create_access_token(data={"sub": str(user["id"]), "email": user["email"], "role": user_role})
+    token = create_access_token(data={"sub": str(user["id"]), "email": user["email"], "name": user["name"], "role": user_role})
     return TokenResponse(
         access_token=token,
         user=UserResponse(id=user["id"], name=user["name"], email=user["email"], role=user_role),
@@ -363,11 +400,15 @@ def login_for_swagger(form_data: OAuth2PasswordRequestForm = Depends()):
         raise HTTPException(status_code=400, detail="Incorrect email or password")
 
     user_role = user.get("role", "user")
-    token = create_access_token(data={"sub": str(user["id"]), "email": user["email"], "role": user_role})
+    token = create_access_token(data={"sub": str(user["id"]), "email": user["email"], "name": user["name"], "role": user_role})
     return TokenResponse(
         access_token=token,
         user=UserResponse(id=user["id"], name=user["name"], email=user["email"], role=user_role),
     )
+
+
+class UpdateProfileRequest(BaseModel):
+    name: str
 
 
 @router.get("/me", response_model=UserResponse)
@@ -375,6 +416,25 @@ def get_profile(current_user: Dict[str, Any] = Depends(get_current_user)):
     return UserResponse(
         id=current_user["id"],
         name=current_user["name"],
+        email=current_user["email"],
+        role=current_user.get("role", "user"),
+    )
+
+
+@router.put("/me", response_model=UserResponse)
+def update_profile(
+    req: UpdateProfileRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    from src.api.database import update_user_name
+    clean_name = req.name.strip()
+    if not clean_name:
+        raise HTTPException(status_code=400, detail="Name cannot be blank.")
+    update_user_name(current_user["id"], clean_name)
+    current_user["name"] = clean_name
+    return UserResponse(
+        id=current_user["id"],
+        name=clean_name,
         email=current_user["email"],
         role=current_user.get("role", "user"),
     )

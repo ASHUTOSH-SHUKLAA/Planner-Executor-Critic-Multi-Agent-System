@@ -73,9 +73,12 @@ def get_users_list(admin: Dict[str, Any] = Depends(require_admin)):
 
 
 @router.get("/workflows", response_model=List[AdminWorkflowItem])
-def get_all_workflows(admin: Dict[str, Any] = Depends(require_admin)):
-    """Returns system-wide execution history for monitoring."""
-    records = list_all_workflows(limit=100)
+def get_all_workflows(
+    user_id: Optional[int] = None,
+    admin: Dict[str, Any] = Depends(require_admin),
+):
+    """Returns system-wide execution history for monitoring, optionally filtered by user_id."""
+    records = list_all_workflows(limit=100, user_id=user_id)
     return [
         AdminWorkflowItem(
             workflow_id=r["workflow_id"],

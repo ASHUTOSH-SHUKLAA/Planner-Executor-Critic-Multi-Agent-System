@@ -1,5 +1,5 @@
 """
-Email Dispatch Service for TriadFlow Authentication.
+Email Dispatch Service for Synora Authentication.
 Supports standard SMTP with TLS/SSL (e.g., Gmail, SendGrid, Amazon SES, Mailgun, Outlook).
 Dispatches branded HTML + Plain Text verification OTP emails.
 """
@@ -10,12 +10,14 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import logging
 from typing import Optional, Tuple
+from dotenv import load_dotenv
 
 logger = logging.getLogger("email_service")
 
 
 def is_smtp_configured() -> bool:
     """Check if outbound SMTP server credentials are provided in environment."""
+    load_dotenv(override=True)
     host = os.getenv("SMTP_HOST", "").strip()
     user = os.getenv("SMTP_USER", "").strip()
     password = os.getenv("SMTP_PASSWORD", "").strip()
@@ -29,7 +31,7 @@ def generate_otp_email_html(code: str, user_name: Optional[str] = None) -> str:
 <html>
 <head>
   <meta charset="utf-8">
-  <title>TriadFlow Verification Code</title>
+  <title>Synora Verification Code</title>
   <style>
     body {{
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -49,7 +51,7 @@ def generate_otp_email_html(code: str, user_name: Optional[str] = None) -> str:
       box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
     }}
     .header {{
-      background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+      background: linear-gradient(120deg, #ffe18a 0%, #12b9d5 46%, #ff765f 72%, #8980d8 100%);
       padding: 28px 24px;
       text-align: center;
       color: #ffffff;
@@ -81,7 +83,7 @@ def generate_otp_email_html(code: str, user_name: Optional[str] = None) -> str:
       font-size: 36px;
       font-weight: 800;
       letter-spacing: 8px;
-      color: #4f46e5;
+      color: #6259b5;
       margin: 0;
     }}
     .meta-text {{
@@ -102,13 +104,13 @@ def generate_otp_email_html(code: str, user_name: Optional[str] = None) -> str:
 <body>
   <div class="container">
     <div class="header">
-      <h1>TriadFlow Multi-Agent System</h1>
-      <p>Secure Passwordless Authentication</p>
+      <h1>Synora</h1>
+      <p>Autonomous research powered by coordinated intelligence</p>
     </div>
     <div class="content">
       <p style="font-size: 15px; font-weight: 600; margin-top: 0;">{greeting}</p>
       <p style="font-size: 14px; color: #475569;">
-        You recently requested to sign in or register for TriadFlow. Use the 6-digit verification code below to complete your authentication:
+        You recently requested to sign in or register for Synora. Use the 6-digit verification code below to complete your authentication:
       </p>
       <div class="otp-box">
         <div class="otp-code">{code}</div>
@@ -119,7 +121,7 @@ def generate_otp_email_html(code: str, user_name: Optional[str] = None) -> str:
       </p>
     </div>
     <div class="footer">
-      TriadFlow Multi-Agent Research Platform &bull; Automated System Security Notification
+      Synora &bull; Secure sign-in verification
     </div>
   </div>
 </body>
@@ -132,10 +134,10 @@ def generate_otp_email_text(code: str, user_name: Optional[str] = None) -> str:
     greeting = f"Hello {user_name},\n\n" if user_name else "Hello,\n\n"
     return (
         f"{greeting}"
-        f"Your TriadFlow verification code is: {code}\n\n"
+        f"Your Synora verification code is: {code}\n\n"
         f"This code will expire in 10 minutes and can only be used once.\n\n"
         f"If you did not request this code, you can safely ignore this email.\n\n"
-        f"--\nTriadFlow Multi-Agent System"
+        f"--\nSynora"
     )
 
 
@@ -148,11 +150,12 @@ def send_verification_email(
     Dispatches a verification email containing the 6-digit OTP code to the recipient.
     Returns (success: bool, status_message: str).
     """
+    load_dotenv(override=True)
     host = os.getenv("SMTP_HOST", "").strip()
     port = int(os.getenv("SMTP_PORT", "587"))
     user = os.getenv("SMTP_USER", "").strip()
     password = os.getenv("SMTP_PASSWORD", "").strip()
-    from_name = os.getenv("SMTP_FROM_NAME", "TriadFlow Security").strip()
+    from_name = os.getenv("SMTP_FROM_NAME", "Synora Security").strip()
     from_email = os.getenv("SMTP_FROM_EMAIL", user or "auth@triadflow.ai").strip()
 
     if not host or not user or not password:
@@ -163,7 +166,7 @@ def send_verification_email(
         return False, "SMTP server not configured in environment"
 
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"Your TriadFlow Verification Code: {code}"
+    msg["Subject"] = f"Your Synora Verification Code: {code}"
     msg["From"] = f"{from_name} <{from_email}>"
     msg["To"] = to_email
 
