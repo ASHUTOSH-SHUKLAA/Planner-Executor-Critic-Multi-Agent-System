@@ -42,7 +42,7 @@ export default function HistoryPage() {
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
-      router.replace("/");
+      router.replace("/login");
     }
   }, [isAuthenticated, authLoading, router]);
 

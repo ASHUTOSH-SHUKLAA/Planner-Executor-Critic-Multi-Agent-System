@@ -13,7 +13,7 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!isLoading) {
       if (!isAuthenticated) {
-        router.replace("/");
+        router.replace("/login");
       } else if (isAdmin) {
         router.replace("/admin");
       }

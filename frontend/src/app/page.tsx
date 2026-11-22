@@ -17,8 +17,7 @@ export default function HomePage() {
     }
   }, [isLoading, isAuthenticated, isAdmin, router]);
 
-  // While auth is resolving AND we have a saved token, always show the
-  // dark loading screen — never flash LandingView for authenticated users.
+  // While auth is resolving AND we have a saved token, show the loading screen
   const hasSavedToken = typeof window !== "undefined" && Boolean(localStorage.getItem("pec_token"));
   const authResolving = isLoading || (hasSavedToken && !isAuthenticated);
 
@@ -31,7 +30,7 @@ export default function HomePage() {
     );
   }
 
-  // When authenticated as a researcher, the Home Page is the Research Workspace
+  // When validated and authenticated as a researcher, load the Research Workspace
   if (isAuthenticated) {
     return (
       <Suspense
@@ -47,6 +46,6 @@ export default function HomePage() {
     );
   }
 
-  // When not authenticated (and no saved token), show the marketing Landing Page
+  // When not authenticated, present the public Landing Page (requires sign-in to research)
   return <LandingView />;
 }

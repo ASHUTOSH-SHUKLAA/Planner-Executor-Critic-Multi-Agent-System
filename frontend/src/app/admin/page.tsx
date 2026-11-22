@@ -55,7 +55,7 @@ export default function AdminPage() {
   useEffect(() => {
     if (!authLoading) {
       if (!isAuthenticated) {
-        router.replace("/");
+        router.replace("/login");
       } else if (!isAdmin) {
         error("Access denied: Administrative privileges required.", "Unauthorized");
         router.replace("/");
