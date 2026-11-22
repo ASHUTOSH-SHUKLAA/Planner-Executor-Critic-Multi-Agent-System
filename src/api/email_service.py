@@ -2,9 +2,12 @@
 Email Dispatch Service for Synora Authentication.
 Supports standard SMTP with TLS/SSL (e.g., Gmail, SendGrid, Amazon SES, Mailgun, Outlook).
 Dispatches branded HTML + Plain Text verification OTP emails.
+Forces IPv4 connection to prevent Linux container '[Errno 101] Network is unreachable' errors on IPv6-less cloud networks.
 """
 
 import os
+import socket
+import ssl
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -13,6 +16,51 @@ from typing import Optional, Tuple
 from dotenv import load_dotenv
 
 logger = logging.getLogger("email_service")
+
+
+def _create_ipv4_socket(host: str, port: int, timeout: float = 10.0) -> socket.socket:
+    """Forces IPv4 socket resolution to avoid [Errno 101] Network is unreachable on cloud container runtimes."""
+    try:
+        res_list = socket.getaddrinfo(host, port, socket.AF_INET, socket.SOCK_STREAM)
+    except Exception as e:
+        raise OSError(101, f"Failed to resolve IPv4 address for {host}: {e}")
+
+    if not res_list:
+        raise OSError(101, f"No IPv4 address found for {host}")
+
+    last_err = None
+    for res in res_list:
+        af, socktype, proto, canonname, sa = res
+        sock = None
+        try:
+            sock = socket.socket(af, socktype, proto)
+            sock.settimeout(timeout)
+            sock.connect(sa)
+            return sock
+        except OSError as e:
+            last_err = e
+            if sock is not None:
+                try:
+                    sock.close()
+                except Exception:
+                    pass
+
+    if last_err:
+        raise last_err
+    raise OSError(101, f"Could not connect to any IPv4 address for {host}:{port}")
+
+
+class IPv4SMTP(smtplib.SMTP):
+    """SMTP client constrained strictly to IPv4 to prevent unreachable network errors in cloud Docker containers."""
+    def _get_socket(self, host, port, timeout):
+        return _create_ipv4_socket(host, port, timeout)
+
+
+class IPv4SMTP_SSL(smtplib.SMTP_SSL):
+    """SMTP_SSL client constrained strictly to IPv4."""
+    def _get_socket(self, host, port, timeout):
+        raw_sock = _create_ipv4_socket(host, port, timeout)
+        return self.context.wrap_socket(raw_sock, server_hostname=self._host)
 
 
 def is_smtp_configured() -> bool:
@@ -65,25 +113,25 @@ def generate_otp_email_html(code: str, user_name: Optional[str] = None) -> str:
     .header p {{
       margin: 6px 0 0 0;
       font-size: 13px;
-      opacity: 0.9;
+      opacity: 0.95;
     }}
     .content {{
       padding: 32px 28px;
     }}
     .otp-box {{
       background: #f8fafc;
-      border: 2px dashed #cbd5e1;
-      border-radius: 10px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
       padding: 20px;
       text-align: center;
       margin: 24px 0;
     }}
     .otp-code {{
-      font-family: 'Courier New', Courier, monospace;
+      font-family: 'JetBrains Mono', SFMono-Regular, Menlo, Monaco, Consolas, monospace;
       font-size: 36px;
       font-weight: 800;
       letter-spacing: 8px;
-      color: #6259b5;
+      color: #0f172a;
       margin: 0;
     }}
     .meta-text {{
@@ -148,13 +196,17 @@ def send_verification_email(
 ) -> Tuple[bool, str]:
     """
     Dispatches a verification email containing the 6-digit OTP code to the recipient.
+    Forces IPv4 connections to avoid [Errno 101] Network is unreachable on cloud container runtimes.
+    Automatically tries port 587 (STARTTLS) and falls back to port 465 (SSL) if blocked.
     Returns (success: bool, status_message: str).
     """
     load_dotenv()
     host = os.getenv("SMTP_HOST", "").strip()
-    port = int(os.getenv("SMTP_PORT", "587"))
+    configured_port = int(os.getenv("SMTP_PORT", "587"))
     user = os.getenv("SMTP_USER", "").strip()
-    password = os.getenv("SMTP_PASSWORD", "").strip()
+    # Clean app password (remove spaces if user entered 'xxxx xxxx xxxx xxxx')
+    raw_password = os.getenv("SMTP_PASSWORD", "").strip()
+    password = raw_password.replace(" ", "")
     from_name = os.getenv("SMTP_FROM_NAME", "Synora Security").strip()
     from_email = os.getenv("SMTP_FROM_EMAIL", user or "auth@triadflow.ai").strip()
 
@@ -176,24 +228,36 @@ def send_verification_email(
     msg.attach(part_text)
     msg.attach(part_html)
 
-    try:
-        if port == 465:
-            # SSL
-            with smtplib.SMTP_SSL(host, port, timeout=10) as server:
-                server.login(user, password)
-                server.sendmail(from_email, [to_email], msg.as_string())
-        else:
-            # STARTTLS (e.g. port 587 or 25)
-            with smtplib.SMTP(host, port, timeout=10) as server:
-                server.ehlo()
-                server.starttls()
-                server.ehlo()
-                server.login(user, password)
-                server.sendmail(from_email, [to_email], msg.as_string())
+    # Ports to attempt: requested port first, then alternate (465 SSL or 587 TLS)
+    ports_to_try = [configured_port]
+    if configured_port == 587 and 465 not in ports_to_try:
+        ports_to_try.append(465)
+    elif configured_port == 465 and 587 not in ports_to_try:
+        ports_to_try.append(587)
 
-        logger.info(f"Verification OTP successfully dispatched via SMTP to {to_email}")
-        return True, f"Verification code successfully sent to {to_email}"
-    except Exception as e:
-        error_msg = f"Failed to send email via SMTP to {to_email}: {str(e)}"
-        logger.error(error_msg)
-        return False, error_msg
+    last_error = None
+    for port in ports_to_try:
+        try:
+            if port == 465:
+                # SSL over IPv4
+                with IPv4SMTP_SSL(host, port, timeout=10) as server:
+                    server.login(user, password)
+                    server.sendmail(from_email, [to_email], msg.as_string())
+            else:
+                # STARTTLS over IPv4 (port 587)
+                with IPv4SMTP(host, port, timeout=10) as server:
+                    server.ehlo()
+                    server.starttls()
+                    server.ehlo()
+                    server.login(user, password)
+                    server.sendmail(from_email, [to_email], msg.as_string())
+
+            logger.info(f"Verification OTP successfully dispatched via SMTP (port {port}) to {to_email}")
+            return True, f"Verification code successfully sent to {to_email}"
+        except Exception as e:
+            last_error = e
+            logger.warning(f"SMTP dispatch attempt on port {port} failed: {e}. Trying alternate port if available...")
+
+    error_msg = f"Failed to send email via SMTP to {to_email}: {str(last_error)}"
+    logger.error(error_msg)
+    return False, error_msg
