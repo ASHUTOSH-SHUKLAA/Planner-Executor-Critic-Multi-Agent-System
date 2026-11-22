@@ -1,9 +1,17 @@
 /**
- * API client for interacting with the FastAPI Multi-Agent Orchestrator backend (TriadFlow).
+ * API client for the Synora research orchestration backend.
  * Strict JWT bearer token authentication, live web search telemetry, and admin analytics.
  */
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+export function getProxiedImageUrl(src?: string): string {
+  if (!src) return "";
+  if (src.startsWith("http://") || src.startsWith("https://")) {
+    return `${API_BASE_URL}/api/image-proxy?url=${encodeURIComponent(src)}`;
+  }
+  return src;
+}
 
 export interface User {
   id: number;
@@ -86,6 +94,14 @@ export interface WorkflowStateData {
     total_tokens: number;
     estimated_cost_usd: number;
   };
+  follow_ups?: Array<{
+    id: string;
+    query: string;
+    answer: string;
+    sources?: SourceCitation[];
+    timestamp: string;
+    status: "RUNNING" | "COMPLETED" | "FAILED";
+  }>;
 }
 
 export interface SSEMessageEvent {
@@ -97,8 +113,8 @@ export interface WorkflowListItem {
   workflow_id: string;
   task: string;
   status: string;
-  total_tokens: number;
-  estimated_cost_usd: number;
+  total_tokens?: number;
+  estimated_cost_usd?: number;
   created_at: string;
 }
 
@@ -137,146 +153,225 @@ export interface SendCodeResult {
   status: string;
   message: string;
   email: string;
+  smtp_sent?: boolean;
   dev_code?: string;
+}
+
+function handleFetchError(err: any): never {
+  if (err instanceof TypeError && (err.message.includes("fetch") || err.message.includes("NetworkError") || err.message.includes("Failed to fetch"))) {
+    throw new Error("Cannot connect to backend server. Please verify the FastAPI server is running on port 8000.");
+  }
+  throw err;
 }
 
 /**
  * Passwordless Auth: Request a 6-digit verification OTP code
  */
 export async function apiSendAuthCode(email: string, name?: string): Promise<SendCodeResult> {
-  const res = await fetch(`${API_BASE_URL}/api/auth/send-code`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: email.trim(), name: name?.trim() }),
-  });
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/send-code`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: email.trim(), name: name?.trim() }),
+    });
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: "Failed to dispatch verification code" }));
-    throw new Error(err.detail || "Failed to dispatch verification code");
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: "Failed to dispatch verification code" }));
+      throw new Error(err.detail || "Failed to dispatch verification code");
+    }
+
+    return res.json();
+  } catch (err: any) {
+    handleFetchError(err);
   }
-
-  return res.json();
 }
 
 /**
  * Passwordless Auth: Verify the 6-digit OTP code and establish authenticated session
  */
 export async function apiVerifyAuthCode(email: string, code: string, name?: string): Promise<AuthResponse> {
-  const res = await fetch(`${API_BASE_URL}/api/auth/verify-code`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: email.trim(), code: code.trim(), name: name?.trim() }),
-  });
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/verify-code`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: email.trim(), code: code.trim(), name: name?.trim() }),
+    });
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: "Invalid or expired verification code" }));
-    throw new Error(err.detail || "Invalid or expired verification code");
-  }
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: "Invalid or expired verification code" }));
+      throw new Error(err.detail || "Invalid or expired verification code");
+    }
 
-  const data: AuthResponse = await res.json();
-  if (data.user && !data.user.username) {
-    data.user.username = data.user.name;
+    const data: AuthResponse = await res.json();
+    if (data.user && !data.user.username) {
+      data.user.username = data.user.name;
+    }
+    return data;
+  } catch (err: any) {
+    handleFetchError(err);
   }
-  return data;
 }
 
 /**
  * Register a new user
  */
 export async function apiRegister(name: string, email: string, password: string): Promise<AuthResponse> {
-  const res = await fetch(`${API_BASE_URL}/api/auth/register`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name, email, password }),
-  });
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, email, password }),
+    });
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: "Registration failed" }));
-    throw new Error(err.detail || "Registration failed");
-  }
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: "Registration failed" }));
+      throw new Error(err.detail || "Registration failed");
+    }
 
-  const data: AuthResponse = await res.json();
-  if (data.user && !data.user.username) {
-    data.user.username = data.user.name;
+    const data: AuthResponse = await res.json();
+    if (data.user && !data.user.username) {
+      data.user.username = data.user.name;
+    }
+    return data;
+  } catch (err: any) {
+    handleFetchError(err);
   }
-  return data;
 }
 
 /**
  * Log in an existing user with email and password
  */
 export async function apiLogin(email: string, password: string): Promise<AuthResponse> {
-  const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: email.trim(), password }),
-  });
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: email.trim(), password }),
+    });
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: "Invalid email or password" }));
-    throw new Error(err.detail || "Login failed");
-  }
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: "Invalid email or password" }));
+      throw new Error(err.detail || "Login failed");
+    }
 
-  const data: AuthResponse = await res.json();
-  if (data.user && !data.user.username) {
-    data.user.username = data.user.name;
+    const data: AuthResponse = await res.json();
+    if (data.user && !data.user.username) {
+      data.user.username = data.user.name;
+    }
+    return data;
+  } catch (err: any) {
+    handleFetchError(err);
   }
-  return data;
 }
 
 /**
  * Fetch current authenticated user profile
  */
 export async function apiGetMe(token: string): Promise<User> {
-  const res = await fetch(`${API_BASE_URL}/api/auth/me`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/me`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
 
-  if (!res.ok) {
-    throw new Error("Failed to verify user credentials");
-  }
+    if (!res.ok) {
+      throw new Error("Failed to verify user credentials");
+    }
 
-  const data: User = await res.json();
-  if (!data.username) {
-    data.username = data.name;
+    const data: User = await res.json();
+    if (!data.username) {
+      data.username = data.name;
+    }
+    return data;
+  } catch (err: any) {
+    handleFetchError(err);
   }
-  return data;
+}
+
+export async function apiUpdateProfile(token: string, name: string): Promise<User> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/me`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ name }),
+    });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.detail || "Failed to update profile name");
+    }
+
+    const data: User = await res.json();
+    if (!data.username) {
+      data.username = data.name;
+    }
+    return data;
+  } catch (err: any) {
+    handleFetchError(err);
+  }
 }
 
 /**
  * Fetch real user workflow history from backend
  */
 export async function apiListWorkflows(token: string): Promise<WorkflowListItem[]> {
-  const res = await fetch(`${API_BASE_URL}/api/workflows`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/workflows`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
 
-  if (!res.ok) {
-    throw new Error("Failed to fetch workflow history");
+    if (!res.ok) {
+      throw new Error("Failed to fetch workflow history");
+    }
+
+    return res.json();
+  } catch (err: any) {
+    handleFetchError(err);
   }
-
-  return res.json();
 }
 
 /**
  * Fetch details of a specific workflow
  */
 export async function apiGetWorkflow(workflowId: string, token: string): Promise<any> {
-  const res = await fetch(`${API_BASE_URL}/api/workflows/${workflowId}`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/workflows/${workflowId}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
 
-  if (!res.ok) {
-    throw new Error("Workflow not found or access denied");
+    if (!res.ok) {
+      throw new Error("Workflow not found or access denied");
+    }
+
+    return res.json();
+  } catch (err: any) {
+    handleFetchError(err);
   }
+}
 
-  return res.json();
+/**
+ * Delete a workflow record
+ */
+export async function apiDeleteWorkflow(workflowId: string, token: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/workflows/${workflowId}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return res.ok;
+  } catch (err: any) {
+    return false;
+  }
 }
 
 /**
@@ -284,67 +379,88 @@ export async function apiGetWorkflow(workflowId: string, token: string): Promise
  */
 export async function apiDownloadWorkflow(
   workflowId: string,
-  format: "md" | "txt",
+  format: "md" | "txt" | "pdf",
   token: string
 ): Promise<{ blob: Blob; filename: string }> {
-  const res = await fetch(`${API_BASE_URL}/api/workflows/${workflowId}/download?format=${format}`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/workflows/${workflowId}/download?format=${format}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: "Download failed" }));
-    throw new Error(err.detail || "Download failed");
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: "Download failed" }));
+      throw new Error(err.detail || "Download failed");
+    }
+
+    const blob = await res.blob();
+    const filename = `synora_${workflowId}.${format}`;
+    return { blob, filename };
+  } catch (err: any) {
+    handleFetchError(err);
   }
-
-  const blob = await res.blob();
-  const filename = `triadflow_${workflowId}.${format}`;
-  return { blob, filename };
 }
 
 /**
  * Admin APIs
  */
 export async function apiGetAdminStats(token: string): Promise<AdminStats> {
-  const res = await fetch(`${API_BASE_URL}/api/admin/stats`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: "Access denied" }));
-    throw new Error(err.detail || "Failed to fetch admin stats");
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/admin/stats`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: "Access denied" }));
+      throw new Error(err.detail || "Failed to fetch admin stats");
+    }
+    return res.json();
+  } catch (err: any) {
+    handleFetchError(err);
   }
-  return res.json();
 }
 
 export async function apiGetAdminUsers(token: string): Promise<AdminUser[]> {
-  const res = await fetch(`${API_BASE_URL}/api/admin/users`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) {
-    throw new Error("Failed to fetch registered users");
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/admin/users`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      throw new Error("Failed to fetch registered users");
+    }
+    return res.json();
+  } catch (err: any) {
+    handleFetchError(err);
   }
-  return res.json();
 }
 
-export async function apiGetAdminWorkflows(token: string): Promise<AdminWorkflow[]> {
-  const res = await fetch(`${API_BASE_URL}/api/admin/workflows`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) {
-    throw new Error("Failed to fetch system workflows");
+export async function apiGetAdminWorkflows(token: string, userId?: number): Promise<AdminWorkflow[]> {
+  try {
+    const url = userId ? `${API_BASE_URL}/api/admin/workflows?user_id=${userId}` : `${API_BASE_URL}/api/admin/workflows`;
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      throw new Error("Failed to fetch system workflows");
+    }
+    return res.json();
+  } catch (err: any) {
+    handleFetchError(err);
   }
-  return res.json();
 }
 
 export async function apiGetAdminServerLogs(token: string): Promise<{ log_file: string; total_lines: number; content: string }> {
-  const res = await fetch(`${API_BASE_URL}/api/admin/server-logs`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) {
-    throw new Error("Failed to fetch server audit logs");
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/admin/server-logs`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      throw new Error("Failed to fetch server audit logs");
+    }
+    return res.json();
+  } catch (err: any) {
+    handleFetchError(err);
   }
-  return res.json();
 }
 
 /**
@@ -357,7 +473,8 @@ export async function streamWorkflowExecution(
   onEvent: (event: SSEMessageEvent) => void,
   onError: (err: Error) => void,
   onComplete: () => void,
-  abortSignal?: AbortSignal
+  abortSignal?: AbortSignal,
+  model?: string
 ): Promise<void> {
   try {
     const headers: Record<string, string> = {
@@ -370,7 +487,7 @@ export async function streamWorkflowExecution(
     const response = await fetch(`${API_BASE_URL}/api/workflows/run-stream`, {
       method: "POST",
       headers,
-      body: JSON.stringify({ task: goal, goal, mode }),
+      body: JSON.stringify({ task: goal, goal, mode, model }),
       signal: abortSignal,
     });
 
@@ -392,36 +509,59 @@ export async function streamWorkflowExecution(
     const decoder = new TextDecoder("utf-8");
     let buffer = "";
 
+    const processChunk = (chunkText: string) => {
+      const trimmedChunk = chunkText.trim();
+      if (!trimmedChunk) return;
+
+      const lines = trimmedChunk.split("\n");
+      let eventName = "message";
+      const dataLines: string[] = [];
+
+      for (const line of lines) {
+        if (!line || line.startsWith(":")) {
+          // SSE comment/keepalive/ping
+          continue;
+        }
+        if (line.startsWith("event:")) {
+          eventName = line.slice(6).trim();
+        } else if (line.startsWith("data:")) {
+          let lineData = line.slice(5);
+          if (lineData.startsWith(" ")) {
+            lineData = lineData.slice(1);
+          }
+          dataLines.push(lineData);
+        }
+      }
+
+      if (dataLines.length > 0) {
+        const fullDataStr = dataLines.join("\n");
+        try {
+          const parsedData = JSON.parse(fullDataStr);
+          onEvent({ event: eventName, data: parsedData });
+        } catch (e) {
+          console.warn("Failed to parse SSE payload:", fullDataStr, e);
+        }
+      }
+    };
+
     while (true) {
       const { done, value } = await reader.read();
-      if (done) break;
+      if (done) {
+        if (buffer.trim()) {
+          processChunk(buffer);
+          buffer = "";
+        }
+        break;
+      }
 
       buffer += decoder.decode(value, { stream: true });
+      // Normalize CRLF to LF so splitting works uniformly across all OS and SSE servers
+      buffer = buffer.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
       const chunks = buffer.split("\n\n");
       buffer = chunks.pop() || "";
 
       for (const chunk of chunks) {
-        const lines = chunk.split("\n");
-        let eventName = "message";
-        let dataStr = "";
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (trimmed.startsWith("event:")) {
-            eventName = trimmed.slice(6).trim();
-          } else if (trimmed.startsWith("data:")) {
-            dataStr = trimmed.slice(5).trim();
-          }
-        }
-
-        if (dataStr) {
-          try {
-            const parsedData = JSON.parse(dataStr);
-            onEvent({ event: eventName, data: parsedData });
-          } catch (e) {
-            console.warn("Failed to parse SSE payload:", dataStr, e);
-          }
-        }
+        processChunk(chunk);
       }
     }
 
@@ -434,3 +574,113 @@ export async function streamWorkflowExecution(
     onError(error instanceof Error ? error : new Error(String(error)));
   }
 }
+
+export interface FollowUpStreamRequestData {
+  workflow_id?: string;
+  task: string;
+  report_content: string;
+  query: string;
+  history?: { query: string; answer: string }[];
+  model?: string;
+}
+
+/**
+ * Run a grounded follow-up research inquiry streaming SSE updates.
+ * Evaluates specifically among the candidates from the initial search.
+ */
+export async function streamFollowUpExecution(
+  req: FollowUpStreamRequestData,
+  token: string | null,
+  onEvent: (event: SSEMessageEvent) => void,
+  onError: (err: Error) => void,
+  onComplete: () => void,
+  abortSignal?: AbortSignal
+): Promise<void> {
+  try {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    const response = await fetch(`${API_BASE_URL}/api/workflows/follow-up-stream`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(req),
+      signal: abortSignal,
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      let msg = errText;
+      try {
+        const parsed = JSON.parse(errText);
+        msg = parsed.detail || errText;
+      } catch {}
+      throw new Error(`Follow-up request failed (${response.status}): ${msg}`);
+    }
+
+    if (!response.body) {
+      throw new Error("No response stream body available");
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buffer = "";
+
+    const processChunk = (chunkText: string) => {
+      const lines = chunkText.split("\n");
+      let eventName = "message";
+      const dataLines: string[] = [];
+
+      for (const line of lines) {
+        if (line.startsWith("event:")) {
+          eventName = line.slice(6).trim();
+        } else if (line.startsWith("data:")) {
+          const lineData = line.slice(5).trim();
+          dataLines.push(lineData);
+        }
+      }
+
+      if (dataLines.length > 0) {
+        const fullDataStr = dataLines.join("\n");
+        try {
+          const parsedData = JSON.parse(fullDataStr);
+          onEvent({ event: eventName, data: parsedData });
+        } catch (e) {
+          console.warn("Failed to parse SSE payload:", fullDataStr, e);
+        }
+      }
+    };
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        if (buffer.trim()) {
+          processChunk(buffer);
+          buffer = "";
+        }
+        break;
+      }
+
+      buffer += decoder.decode(value, { stream: true });
+      buffer = buffer.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+      const chunks = buffer.split("\n\n");
+      buffer = chunks.pop() || "";
+
+      for (const chunk of chunks) {
+        processChunk(chunk);
+      }
+    }
+
+    onComplete();
+  } catch (error: any) {
+    if (error.name === "AbortError") {
+      console.log("Follow-up stream aborted by user");
+      return;
+    }
+    onError(error instanceof Error ? error : new Error(String(error)));
+  }
+}
+

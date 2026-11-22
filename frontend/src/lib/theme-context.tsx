@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 
 type Theme = "dark" | "light" | "system";
 
@@ -20,56 +20,72 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [resolvedTheme, setResolvedTheme] = useState<"dark" | "light">("dark");
   const [mounted, setMounted] = useState(false);
 
+  // Synchronously update HTML root classes in 0ms with zero render delay
+  const applyThemeToDOM = (active: "dark" | "light") => {
+    if (typeof document === "undefined") return;
+    const root = document.documentElement;
+    if (active === "dark") {
+      root.classList.add("dark");
+      root.style.colorScheme = "dark";
+    } else {
+      root.classList.remove("dark");
+      root.style.colorScheme = "light";
+    }
+  };
+
   useEffect(() => {
     // Read persisted theme or default to system/dark
     const stored = (localStorage.getItem(THEME_STORAGE_KEY) as Theme) || "dark";
+    let active: "dark" | "light" = "dark";
+    if (stored === "system") {
+      active = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    } else {
+      active = stored === "light" ? "light" : "dark";
+    }
+    applyThemeToDOM(active);
     setThemeState(stored);
+    setResolvedTheme(active);
     setMounted(true);
-  }, []);
 
-  useEffect(() => {
-    if (!mounted) return;
-
-    const root = document.documentElement;
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-
-    const applyTheme = () => {
-      let activeTheme: "dark" | "light" = "dark";
-      if (theme === "system") {
-        activeTheme = mediaQuery.matches ? "dark" : "light";
-      } else {
-        activeTheme = theme;
-      }
-
-      setResolvedTheme(activeTheme);
-
-      if (activeTheme === "dark") {
-        root.classList.add("dark");
-        root.style.colorScheme = "dark";
-      } else {
-        root.classList.remove("dark");
-        root.style.colorScheme = "light";
-      }
-    };
-
-    applyTheme();
-    localStorage.setItem(THEME_STORAGE_KEY, theme);
-
     const handleSystemChange = () => {
-      if (theme === "system") applyTheme();
+      const currentStored = localStorage.getItem(THEME_STORAGE_KEY);
+      if (currentStored === "system") {
+        const sysActive = mediaQuery.matches ? "dark" : "light";
+        applyThemeToDOM(sysActive);
+        setResolvedTheme(sysActive);
+      }
     };
 
     mediaQuery.addEventListener("change", handleSystemChange);
     return () => mediaQuery.removeEventListener("change", handleSystemChange);
-  }, [theme, mounted]);
+  }, []);
 
-  const setTheme = (newTheme: Theme) => {
+  // Instant synchronous toggle with zero delay
+  const toggleTheme = useCallback(() => {
+    const nextTheme: "dark" | "light" = resolvedTheme === "dark" ? "light" : "dark";
+    applyThemeToDOM(nextTheme);
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
+    } catch {}
+    setResolvedTheme(nextTheme);
+    setThemeState(nextTheme);
+  }, [resolvedTheme]);
+
+  const setTheme = useCallback((newTheme: Theme) => {
+    let active: "dark" | "light" = "dark";
+    if (newTheme === "system") {
+      active = typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    } else {
+      active = newTheme === "light" ? "light" : "dark";
+    }
+    applyThemeToDOM(active);
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, newTheme);
+    } catch {}
+    setResolvedTheme(active);
     setThemeState(newTheme);
-  };
-
-  const toggleTheme = () => {
-    setThemeState((prev) => (prev === "dark" ? "light" : "dark"));
-  };
+  }, []);
 
   return (
     <ThemeContext.Provider value={{ theme, resolvedTheme, setTheme, toggleTheme }}>

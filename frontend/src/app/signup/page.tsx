@@ -4,32 +4,35 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { useToast } from "@/lib/toast-context";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { Bot, User, Mail, KeyRound, ArrowRight, ArrowLeft, AlertCircle, CheckCircle2, ShieldCheck } from "lucide-react";
+import { OtpInput } from "@/components/ui/otp-input";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { BrandMark } from "@/components/brand-mark";
+import { User, Mail, ArrowRight, ArrowLeft, AlertCircle } from "lucide-react";
 
 export default function SignupPage() {
   const router = useRouter();
-  const { requestCode, verifyCode, isAuthenticated, isAdmin } = useAuth();
-  const { success } = useToast();
+  const { requestCode, verifyCode, isAuthenticated, isAdmin, isLoading: authLoading } = useAuth();
 
   const [step, setStep] = useState<"details" | "code">("details");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
+  const [smtpSent, setSmtpSent] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [resendCountdown, setResendCountdown] = useState(0);
 
   useEffect(() => {
-    if (isAuthenticated) {
+    if (!authLoading && isAuthenticated) {
       if (isAdmin) {
-        router.push("/admin");
+        router.replace("/admin");
       } else {
-        router.push("/dashboard");
+        router.replace("/");
       }
     }
-  }, [isAuthenticated, isAdmin, router]);
+  }, [isAuthenticated, isAdmin, authLoading, router]);
 
   useEffect(() => {
     if (resendCountdown > 0) {
@@ -38,36 +41,30 @@ export default function SignupPage() {
     }
   }, [resendCountdown]);
 
-  const DISPOSABLE_PATTERNS = [
-    "tempmail", "10minute", "throwaway", "fakeinbox", "dispostable",
-    "burnermail", "guerrillamail", "mailinator", "yopmail", "trashmail",
-    "dropmail", "fakeemail", "trash-mail", "getairmail", "sharklasers"
-  ];
-
   const handleSendCode = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    const cleanEmail = email.trim().toLowerCase();
-    const domain = cleanEmail.split("@")[1];
-    if (!domain || !domain.includes(".")) {
-      setError("Please enter a valid email address with a complete domain.");
+    const cleanName = name.trim();
+    if (!cleanName) {
+      setError("Please enter your name.");
       return;
     }
 
-    if (DISPOSABLE_PATTERNS.some((p) => domain.includes(p))) {
-      setError("Registration with temporary or disposable email platforms is prohibited. Please use an authentic email address (e.g. Gmail, Outlook, Yahoo, or your official organization domain).");
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes("@") || !cleanEmail.includes(".")) {
+      setError("Please enter a valid email address.");
       return;
     }
 
     setIsLoading(true);
     try {
-      await requestCode(cleanEmail, name.trim());
+      const res = await requestCode(cleanEmail, cleanName);
+      setSmtpSent(res.smtp_sent ?? true);
       setStep("code");
       setResendCountdown(60);
-      success("Verification code dispatched", "Check Inbox");
     } catch (err: any) {
-      setError(err.message || "Failed to dispatch verification code. Please try again.");
+      setError(err.message || "Failed to send verification code. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -78,18 +75,17 @@ export default function SignupPage() {
     setError(null);
 
     if (code.trim().length !== 6) {
-      setError("Please enter the complete 6-digit verification code.");
+      setError("Please enter the complete 6-digit code.");
       return;
     }
 
     setIsLoading(true);
     try {
       const auth = await verifyCode(email.trim().toLowerCase(), code.trim(), name.trim());
-      success(`Welcome to TriadFlow, ${auth.user.name}!`, "Account Created");
       if (auth.user.role === "admin") {
-        router.push("/admin");
+        router.replace("/admin");
       } else {
-        router.push("/dashboard");
+        router.replace("/");
       }
     } catch (err: any) {
       setError(err.message || "Invalid or expired verification code.");
@@ -98,46 +94,50 @@ export default function SignupPage() {
     }
   };
 
+  // Prevent flash of signup panel when already authenticated or loading auth state
+  if (authLoading || isAuthenticated) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[var(--bg)] text-[var(--text)]">
+        <BrandMark className="h-12 w-12 animate-pulse mb-4" />
+        <div className="h-4 w-4 border-2 border-[#6259b5] border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen flex flex-col justify-center items-center bg-[var(--background)] text-[var(--foreground)] px-4 relative overflow-hidden transition-colors duration-200">
+    <div className="auth-screen min-h-screen flex flex-col justify-center items-center bg-[var(--bg)] text-[var(--text)] px-4 py-12 relative overflow-hidden transition-colors duration-200">
       {/* Top Bar with Theme Toggle */}
       <div className="absolute top-6 right-6 z-20">
         <ThemeToggle />
       </div>
 
       {/* Ambient background glow */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[350px] bg-indigo-500/10 dark:bg-indigo-600/10 blur-[120px] rounded-full pointer-events-none" />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[480px] h-[320px] bg-[#6259b5]/10 dark:bg-[#8980d8]/15 blur-[120px] rounded-full pointer-events-none" />
 
-      {/* Top Brand Link */}
-      <Link href="/" className="flex items-center gap-2 mb-8 group relative z-10">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 text-white shadow-md shadow-indigo-500/20 group-hover:scale-105 transition-transform">
-          <Bot className="h-6 w-6" />
-        </div>
-        <div className="text-xl font-bold tracking-tight text-zinc-900 dark:text-white">
-          TriadFlow
+      {/* Brand Header */}
+      <Link href="/" className="flex items-center gap-2.5 mb-8 group relative z-10">
+        <BrandMark className="h-10 w-10 shrink-0 transition-transform group-hover:scale-105" />
+        <div className="text-xl font-bold tracking-tight text-[#1b2235] dark:text-[#ffffff]">
+          <span>Synora</span>
         </div>
       </Link>
 
       {/* Signup Card */}
-      <div className="w-full max-w-md rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/95 dark:bg-zinc-950/80 p-8 shadow-xl dark:shadow-2xl backdrop-blur-xl relative z-10">
+      <div className="auth-card w-full max-w-sm rounded-2xl border border-[#dce2ee] dark:border-[#303b58] bg-[#ffffff] dark:bg-[#1b2438] p-7 sm:p-8 shadow-xl dark:shadow-2xl backdrop-blur-xl relative z-10">
         <div className="text-center mb-6">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800 text-[11px] font-medium text-indigo-700 dark:text-indigo-300 mb-3">
-            <ShieldCheck className="h-3.5 w-3.5" />
-            Verified Email Onboarding
-          </div>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white tracking-tight">
-            {step === "details" ? "Create your account" : "Enter Verification Code"}
+          <h1 className="text-2xl font-bold text-[#1b2235] dark:text-[#ffffff] tracking-tight">
+            {step === "details" ? "Create an account" : "Check your email"}
           </h1>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+          <p className="text-xs text-[#626b82] dark:text-[#a9b2c6] mt-1.5">
             {step === "details"
-              ? "Sign up with your authentic email — no password memorization required"
-              : `Enter the 6-digit code sent to ${email}`}
+              ? "Autonomous multi-agent research platform"
+              : `We sent a 6-digit code to ${email}`}
           </p>
         </div>
 
         {error && (
-          <div className="mb-4 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-500/30 p-3 text-xs text-red-600 dark:text-red-300 flex items-start gap-2">
-            <AlertCircle className="h-4 w-4 text-red-500 flex-shrink-0 mt-0.5" />
+          <div className="mb-4 rounded-xl bg-[#D62832]/10 border border-[#D62832]/30 p-3 text-xs text-[#D62832] dark:text-[#ff8a90] flex items-start gap-2">
+            <AlertCircle className="h-4 w-4 text-[#D62832] flex-shrink-0 mt-0.5" />
             <span>{error}</span>
           </div>
         )}
@@ -145,67 +145,64 @@ export default function SignupPage() {
         {step === "details" ? (
           <form onSubmit={handleSendCode} className="space-y-4">
             <div>
-              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
+              <label className="block text-xs font-medium text-[#1b2235] dark:text-[#ffffff] mb-1.5">
                 Full Name
               </label>
               <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400 dark:text-zinc-500" />
-                <input
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#626b82] dark:text-[#a9b2c6]" />
+                <Input
                   type="text"
                   required
                   autoFocus
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Jane Doe"
-                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 py-2.5 pl-10 pr-4 text-sm text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-colors"
+                  className="w-full rounded-xl border border-[#dce2ee] dark:border-[#303b58] bg-[#ffffff] dark:bg-[#0c1120] py-2.5 pl-10 pr-4 text-sm text-[#1b2235] dark:text-[#ffffff] placeholder-[#626b82]/60 dark:placeholder-[#a9b2c6]/60 focus:border-[#6259b5] focus:outline-none focus:ring-1 focus:ring-[#6259b5] transition-colors"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
-                Authentic Email Address
+              <label className="block text-xs font-medium text-[#1b2235] dark:text-[#ffffff] mb-1.5">
+                Email
               </label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400 dark:text-zinc-500" />
-                <input
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#626b82] dark:text-[#a9b2c6]" />
+                <Input
                   type="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@company.com or you@gmail.com"
-                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 py-2.5 pl-10 pr-4 text-sm text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-colors"
+                  placeholder="name@company.com"
+                  className="w-full rounded-xl border border-[#dce2ee] dark:border-[#303b58] bg-[#ffffff] dark:bg-[#0c1120] py-2.5 pl-10 pr-4 text-sm text-[#1b2235] dark:text-[#ffffff] placeholder-[#626b82]/60 dark:placeholder-[#a9b2c6]/60 focus:border-[#6259b5] focus:outline-none focus:ring-1 focus:ring-[#6259b5] transition-colors"
                 />
               </div>
-              <p className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-1.5 leading-relaxed">
-                Authentic email required (Gmail, Outlook, Yahoo, or your official organization domain).
-              </p>
             </div>
 
-            <button
+            <Button
               type="submit"
               disabled={isLoading || !email.trim() || !name.trim()}
-              className="w-full flex items-center justify-center gap-2 rounded-xl bg-indigo-600 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 hover:bg-indigo-500 transition-all disabled:opacity-50 cursor-pointer"
+              className="w-full flex items-center justify-center gap-2 rounded-xl bg-[#6259b5] py-2.5 text-sm font-semibold text-white shadow-md shadow-[#6259b5]/20 hover:bg-[#51489d] transition-all disabled:opacity-50 cursor-pointer"
             >
               {isLoading ? (
                 <span className="flex items-center gap-2">
                   <span className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-                  <span>Sending Code...</span>
+                  <span>Sending code...</span>
                 </span>
               ) : (
                 <>
-                  <span>Send Verification Code</span>
+                  <span>Continue</span>
                   <ArrowRight className="h-4 w-4" />
                 </>
               )}
-            </button>
+            </Button>
           </form>
         ) : (
           <form onSubmit={handleVerifyCode} className="space-y-4">
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
-                  6-Digit Verification Code
+                <label className="block text-xs font-medium text-[#1b2235] dark:text-[#ffffff]">
+                  Verification Code
                 </label>
                 <button
                   type="button"
@@ -214,33 +211,32 @@ export default function SignupPage() {
                     setCode("");
                     setError(null);
                   }}
-                  className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline inline-flex items-center gap-1 cursor-pointer"
+                  className="text-[11px] text-[#6259b5] dark:text-[#c6c2fa] hover:underline inline-flex items-center gap-1 cursor-pointer"
                 >
-                  <ArrowLeft className="h-3 w-3" /> Edit details
+                  <ArrowLeft className="h-3 w-3" /> Change
                 </button>
               </div>
-              <div className="relative">
-                <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400 dark:text-zinc-500" />
-                <input
-                  type="text"
-                  required
-                  autoFocus
-                  maxLength={6}
-                  value={code}
-                  onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-                  placeholder="123456"
-                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 py-2.5 pl-10 pr-4 text-center font-mono text-lg tracking-[0.5em] text-zinc-900 dark:text-white placeholder-zinc-300 dark:placeholder-zinc-700 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-colors"
-                />
-              </div>
-              <p className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-1.5 text-center">
-                Code expires in 10 minutes. Max 5 verification attempts.
+
+              <p className="text-xs text-[#626b82] dark:text-[#a9b2c6] mb-2.5">
+                Enter the 6-digit code sent to <span className="font-semibold text-[#1b2235] dark:text-[#ffffff]">{email}</span>.
               </p>
+
+              <OtpInput value={code} onChange={setCode} autoFocus />
+
+              {!smtpSent && (
+                <div className="mt-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-700 dark:text-amber-300 flex items-start gap-2">
+                  <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                  <div className="leading-relaxed">
+                    Outbound SMTP is not configured in <code className="px-1 py-0.5 rounded bg-amber-500/15 font-mono">.env</code>. Check your server terminal for the OTP, or configure Gmail SMTP in <code className="px-1 py-0.5 rounded bg-amber-500/15 font-mono">.env</code> to deliver codes directly to your inbox.
+                  </div>
+                </div>
+              )}
             </div>
 
-            <button
+            <Button
               type="submit"
               disabled={isLoading || code.length !== 6}
-              className="w-full flex items-center justify-center gap-2 rounded-xl bg-indigo-600 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 hover:bg-indigo-500 transition-all disabled:opacity-50 cursor-pointer"
+              className="w-full flex items-center justify-center gap-2 rounded-xl bg-[#6259b5] py-2.5 text-sm font-semibold text-white shadow-md shadow-[#6259b5]/20 hover:bg-[#51489d] transition-all disabled:opacity-50 cursor-pointer"
             >
               {isLoading ? (
                 <span className="flex items-center gap-2">
@@ -248,19 +244,16 @@ export default function SignupPage() {
                   <span>Verifying...</span>
                 </span>
               ) : (
-                <>
-                  <span>Verify & Create Account</span>
-                  <ArrowRight className="h-4 w-4" />
-                </>
+                <span>Continue</span>
               )}
-            </button>
+            </Button>
 
-            <div className="text-center pt-2">
+            <div className="text-center pt-1">
               <button
                 type="button"
                 disabled={resendCountdown > 0 || isLoading}
                 onClick={handleSendCode}
-                className="text-xs text-zinc-500 dark:text-zinc-400 hover:text-indigo-600 dark:hover:text-indigo-400 disabled:opacity-50 cursor-pointer transition-colors"
+                className="text-xs text-[#626b82] dark:text-[#a9b2c6] hover:text-[#6259b5] dark:hover:text-[#c6c2fa] disabled:opacity-50 cursor-pointer transition-colors"
               >
                 {resendCountdown > 0 ? (
                   <span>Resend code in {resendCountdown}s</span>
@@ -272,9 +265,9 @@ export default function SignupPage() {
           </form>
         )}
 
-        <div className="mt-6 pt-5 border-t border-zinc-200 dark:border-zinc-800/80 text-center text-xs text-zinc-500 dark:text-zinc-400">
+        <div className="mt-6 pt-5 border-t border-[#dce2ee] dark:border-[#303b58] text-center text-xs text-[#626b82] dark:text-[#a9b2c6]">
           Already have an account?{" "}
-          <Link href="/login" className="text-indigo-600 dark:text-indigo-400 hover:underline font-medium">
+          <Link href="/login" className="text-[#6259b5] dark:text-[#c6c2fa] hover:underline font-medium">
             Sign in
           </Link>
         </div>
