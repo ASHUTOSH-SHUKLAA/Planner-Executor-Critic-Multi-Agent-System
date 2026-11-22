@@ -7,6 +7,7 @@ from typing import Dict, List, Optional, Any
 from src.tools.base import BaseTool, ToolResult
 from src.tools.search import WebSearchTool
 from src.tools.scraper import WebScraperTool
+from src.tools.image_search import ProductImageSearchTool
 
 
 class ToolRegistry:
@@ -17,6 +18,7 @@ class ToolRegistry:
         # Register standard default tools
         self.register(WebSearchTool())
         self.register(WebScraperTool())
+        self.register(ProductImageSearchTool())
 
     def register(self, tool: BaseTool):
         """Registers a tool instance by its name."""

@@ -52,7 +52,7 @@ class ReplannerAgent:
         model: Optional[str] = None,
     ):
         self.gateway = gateway or LLMGateway()
-        self.model = model or getattr(self.gateway, "default_model", "gemini-3.6-flash")
+        self.model = model or getattr(self.gateway, "default_model", "gemini-3.5-flash")
 
     def build_replan_context(
         self,

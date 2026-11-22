@@ -29,7 +29,7 @@ Your job is to audit an Executor's output for an assigned workflow step with spe
 3. **Relevance (0.0 - 1.0)**: Is the content directly focused on the step objective?
 
 ### DECISION PROTOCOL:
-- **PASS**: If the deliverable is grounded, informative, and meets standards (scores >= 0.70), emit PASS with concise constructive critique.
+- **PASS**: If the deliverable is grounded, informative, and meets standards (scores >= 0.60), emit PASS with concise constructive critique.
 - **REJECT**: Only REJECT if there are genuine factual falsehoods, empty output, or severe omissions. Provide actionable suggested fixes.
 
 You must output a valid JSON object strictly complying with the CriticReview schema.
@@ -46,11 +46,11 @@ class CriticAgent:
         self,
         gateway: Optional[LLMGateway] = None,
         model: Optional[str] = None,
-        pass_threshold: float = 0.70,
+        pass_threshold: float = 0.60,
     ):
         self.gateway = gateway or LLMGateway()
         # The Critic should use the capable reasoning model available
-        self.model = model or getattr(self.gateway, "default_model", "gemini-flash-lite-latest")
+        self.model = model or getattr(self.gateway, "default_model", "gemini-3.5-flash")
         self.pass_threshold = pass_threshold
 
     def evaluate_output(

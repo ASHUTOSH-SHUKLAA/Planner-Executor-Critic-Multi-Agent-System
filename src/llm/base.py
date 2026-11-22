@@ -1,7 +1,7 @@
 """
 Base LLM Provider Abstraction.
 Decouples agent logic (Planner, Executor, Critic, Synthesizer) from specific LLM vendors.
-Supports Google Gemini, Groq, or future enterprise providers without agent refactoring.
+Supports Google Gemini as the enterprise LLM engine without agent refactoring.
 """
 
 from abc import ABC, abstractmethod

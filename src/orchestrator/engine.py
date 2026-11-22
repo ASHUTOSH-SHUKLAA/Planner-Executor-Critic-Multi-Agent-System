@@ -42,14 +42,17 @@ class OrchestrationEngine:
         replanner: Optional[ReplannerAgent] = None,
         synthesizer: Optional[SynthesizerAgent] = None,
         gateway: Optional[LLMGateway] = None,
-        max_step_retries: int = 2,
-        max_workflow_replans: int = 2,
+        max_step_retries: int = 1,
+        max_workflow_replans: int = 1,
         verbose: bool = True,
+        model: Optional[str] = None,
     ):
         self.gateway = gateway or LLMGateway()
-        fast_model = os.getenv("FAST_MODEL") or getattr(self.gateway, "default_model", "gemini-3.6-flash")
-        reasoning_model = os.getenv("DEFAULT_MODEL") or getattr(self.gateway, "default_model", "gemini-3.6-flash")
+        selected_model = model or os.getenv("DEFAULT_MODEL") or getattr(self.gateway, "default_model", "gemini-3.5-flash-lite")
+        fast_model = selected_model
+        reasoning_model = selected_model
 
+        self.model = selected_model
         self.planner = planner or PlannerAgent(gateway=self.gateway, model=reasoning_model)
         self.executor = executor or ExecutorAgent(gateway=self.gateway, model=fast_model)
         self.critic = critic or CriticAgent(gateway=self.gateway, model=fast_model)
@@ -210,7 +213,17 @@ class OrchestrationEngine:
             self._log(f"[WF: {state.workflow_id}] Synthesis report produced successfully.", "green")
         except Exception as e:
             self._log(f"[WF: {state.workflow_id}] Synthesis notice: {e}. Falling back to combined steps.", "yellow")
-            state.final_result = "\n\n".join(f"## {s.title}\n{s.output}" for s in state.step_outputs.values())
+            step_titles = {s.step_id: s.title for s in (state.plan.steps if state.plan else [])}
+            fallback_sections = [
+                f"## {step_titles.get(step_id, step_id.upper())}\n\n{output.content.strip()}"
+                for step_id, output in state.step_outputs.items()
+                if output and output.content
+            ]
+            raw_fallback = "\n\n".join(fallback_sections) or "Autonomous research steps completed."
+            try:
+                state.final_result = self.synthesizer.enrich_report_with_product_images(raw_fallback, state.task)
+            except Exception:
+                state.final_result = raw_fallback
 
         # 6. Workflow Completion
         state.status = WorkflowStatus.COMPLETED
@@ -455,7 +468,14 @@ class OrchestrationEngine:
             self._log(f"[WF: {state.workflow_id}] Synthesis report produced successfully.", "green")
         except Exception as e:
             self._log(f"[WF: {state.workflow_id}] Synthesis notice: {e}. Falling back to combined steps.", "yellow")
-            state.final_result = "\n\n".join(f"## {s.title}\n{s.output}" for s in state.step_outputs.values())
+            raw_fallback = "\n\n".join(
+                f"## {sid.upper()}\n\n{s.content if hasattr(s, 'content') else str(s)}"
+                for sid, s in state.step_outputs.items()
+            )
+            try:
+                state.final_result = self.synthesizer.enrich_report_with_product_images(raw_fallback, state.task, is_commercial=False)
+            except Exception:
+                state.final_result = raw_fallback
 
         # 4. Workflow Completion
         state.status = WorkflowStatus.COMPLETED

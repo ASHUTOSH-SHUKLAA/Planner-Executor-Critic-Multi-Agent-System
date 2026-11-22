@@ -4,6 +4,7 @@ Queries search engines to collect real, verified online sources and evidence.
 Features persistent connection pooling, sub-second parsing, and query caching for ultra-low latency.
 """
 
+import os
 import time
 import re
 import urllib.parse
@@ -26,7 +27,7 @@ class WebSearchTool(BaseTool):
         "Input parameter: 'query' (string). Optional: 'max_results' (int, default 5)."
     )
 
-    def __init__(self, timeout: float = 5.0):
+    def __init__(self, timeout: float = 2.8):
         self.timeout = timeout
         self.headers = {
             "User-Agent": (
@@ -39,13 +40,13 @@ class WebSearchTool(BaseTool):
         }
         # In-memory query cache for zero-latency repeats
         self._cache: Dict[str, ToolResult] = {}
-        # Persistent client with connection pooling
+        # Persistent client with connection pooling and strict socket timeouts
         self._client: Optional[httpx.Client] = None
 
     def _get_client(self) -> httpx.Client:
         if self._client is None or self._client.is_closed:
             self._client = httpx.Client(
-                timeout=self.timeout,
+                timeout=httpx.Timeout(connect=2.0, read=2.5, write=2.0, pool=2.0),
                 follow_redirects=True,
                 headers=self.headers,
                 limits=httpx.Limits(max_keepalive_connections=10, max_connections=20),
@@ -158,7 +159,43 @@ class WebSearchTool(BaseTool):
         start_time = time.perf_counter()
         client = self._get_client()
 
-        # Primary: High-speed DuckDuckGo Lite endpoint (~1s latency)
+        # Primary: Serper Google Search API (when SERPER_API_KEY is configured in .env)
+        serper_key = os.getenv("SERPER_API_KEY")
+        if serper_key and serper_key.strip():
+            try:
+                resp = client.post(
+                    "https://google.serper.dev/search",
+                    headers={
+                        "X-API-KEY": serper_key.strip(),
+                        "Content-Type": "application/json"
+                    },
+                    json={"q": query, "num": max_results, "gl": "in"},
+                    timeout=self.timeout
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    now_iso = datetime.now(timezone.utc).isoformat()
+                    results = []
+                    for item in data.get("organic", [])[:max_results]:
+                        link = item.get("link", "")
+                        if link.startswith("http"):
+                            domain = urllib.parse.urlparse(link).netloc
+                            results.append({
+                                "title": item.get("title") or domain,
+                                "url": link,
+                                "domain": domain,
+                                "snippet": item.get("snippet", ""),
+                                "retrieved_at": now_iso,
+                            })
+                    if results:
+                        latency = time.perf_counter() - start_time
+                        tool_res = ToolResult(success=True, data=results, execution_time_seconds=round(latency, 3))
+                        self._cache[cache_key] = tool_res
+                        return tool_res
+            except Exception:
+                pass
+
+        # Secondary: High-speed DuckDuckGo Lite endpoint (~1s latency)
         try:
             resp = client.post(
                 "https://lite.duckduckgo.com/lite/",

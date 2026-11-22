@@ -1,7 +1,7 @@
 """
 Central LLM Gateway with Provider Abstraction.
 Decouples agent logic from specific LLM vendors.
-Supports Google Gemini as primary, with fallback provider support.
+Dedicated to Google Gemini as the enterprise LLM engine.
 """
 
 import os
@@ -11,9 +11,8 @@ from dotenv import load_dotenv
 
 from src.llm.base import BaseLLMProvider, LLMResponse
 from src.llm.gemini_provider import GeminiProvider, GEMINI_PRICING
-from src.llm.groq_provider import GroqProvider, MODEL_PRICING as GROQ_MODEL_PRICING
 
-MODEL_PRICING = {**GROQ_MODEL_PRICING, **GEMINI_PRICING}
+MODEL_PRICING = GEMINI_PRICING
 
 load_dotenv()
 
@@ -23,7 +22,7 @@ T = TypeVar("T", bound=BaseModel)
 class LLMGateway:
     """
     Unified Gateway for all agent LLM calls.
-    Dispatches to the active BaseLLMProvider (Gemini by default).
+    Dispatches directly to the GeminiProvider.
     Provides:
     1. Direct text generation
     2. Enforced structured output (Pydantic models)
@@ -37,65 +36,44 @@ class LLMGateway:
         default_model: Optional[str] = None,
         provider: Optional[str] = None,
     ):
-        self.api_key = api_key or os.getenv("GEMINI_API_KEY") or os.getenv("GROQ_API_KEY")
+        self.api_key = api_key or os.getenv("GEMINI_API_KEY")
         if not self.api_key:
-            raise ValueError("GROQ_API_KEY is not set. Please create a .env file or pass api_key.")
+            raise ValueError("GEMINI_API_KEY is not set. Please set GEMINI_API_KEY in your .env file.")
 
-        effective_gemini_key = api_key if (api_key and not api_key.startswith("gsk_")) else os.getenv("GEMINI_API_KEY")
-        effective_groq_key = api_key if (api_key and api_key.startswith("gsk_")) else os.getenv("GROQ_API_KEY")
-
-        selected_provider = provider or os.getenv("LLM_PROVIDER")
-        if not selected_provider:
-            if api_key and api_key.startswith("gsk_"):
-                selected_provider = "groq"
-            elif effective_gemini_key:
-                selected_provider = "gemini"
-            elif effective_groq_key:
-                selected_provider = "groq"
-            else:
-                selected_provider = "gemini"
-        selected_provider = selected_provider.lower()
-
-        if selected_provider == "gemini":
-            try:
-                self.provider: BaseLLMProvider = GeminiProvider(
-                    api_key=effective_gemini_key,
-                    default_model=default_model or os.getenv("GEMINI_MODEL", "gemini-flash-lite-latest"),
-                )
-                self.default_model = getattr(self.provider, "default_model", "gemini-flash-lite-latest")
-                self.provider_name = "gemini"
-            except Exception as e:
-                # If Gemini key not available but Groq key is, fallback gracefully
-                if effective_groq_key:
-                    self.provider = GroqProvider(
-                        api_key=effective_groq_key,
-                        default_model=os.getenv("DEFAULT_MODEL", "openai/gpt-oss-120b"),
-                    )
-                    self.default_model = getattr(self.provider, "default_model", "openai/gpt-oss-120b")
-                    self.provider_name = "groq"
-                else:
-                    raise ValueError("GROQ_API_KEY is not set. Please create a .env file or pass api_key.")
-        else:
-            self.provider = GroqProvider(
-                api_key=effective_groq_key,
-                default_model=default_model or os.getenv("DEFAULT_MODEL", "openai/gpt-oss-120b"),
-            )
-            self.default_model = getattr(self.provider, "default_model", "openai/gpt-oss-120b")
-            self.provider_name = "groq"
-        self.secondary_provider: Optional[BaseLLMProvider] = None
-        if self.provider_name == "gemini" and effective_groq_key:
-            try:
-                self.secondary_provider = GroqProvider(api_key=effective_groq_key)
-            except Exception:
-                pass
+        self.provider: BaseLLMProvider = GeminiProvider(
+            api_key=self.api_key,
+            default_model=default_model or os.getenv("GEMINI_MODEL", "gemini-3.5-flash"),
+        )
+        self.default_model = getattr(self.provider, "default_model", "gemini-3.5-flash")
+        self.provider_name = "gemini"
 
     def _calculate_cost(self, model: str, prompt_tokens: int, completion_tokens: int) -> float:
-        """Calculate estimated cost in USD."""
+        """Calculate estimated cost in USD based on Gemini rates."""
         if hasattr(self.provider, "_calculate_cost"):
             return self.provider._calculate_cost(model, prompt_tokens, completion_tokens)
-        rates = MODEL_PRICING.get(model, {"prompt": 0.50 / 1_000_000, "completion": 0.75 / 1_000_000})
+        rates = MODEL_PRICING.get(model, {"prompt": 0.075 / 1_000_000, "completion": 0.30 / 1_000_000})
         cost = (prompt_tokens * rates["prompt"]) + (completion_tokens * rates["completion"])
         return round(cost, 6)
+
+    def _resolve_model(self, requested_model: Optional[str]) -> str:
+        """
+        Normalizes model identifiers and handles cross-provider fallbacks.
+        Supports active Gemini models: Gemini 3.5 Flash, Gemini 3 Flash, Gemini 3.5 Flash Lite, Gemini 3.6 Flash.
+        """
+        if not requested_model:
+            return self.default_model
+
+        m = requested_model.lower().strip()
+        if "3.5-flash-lite" in m or "2.0-flash-lite" in m or "flash-lite" in m or "lite" in m:
+            return "gemini-3.5-flash-lite"
+        if "3.6-flash" in m or "3.6" in m:
+            return "gemini-3.6-flash"
+        if "3.5-flash" in m or "3.5" in m:
+            return "gemini-3.5-flash"
+        if "3-flash" in m or "preview" in m or "gemini-3" in m:
+            return "gemini-3-flash-preview"
+        # All legacy flash / pro models map smoothly to active gemini-3.5-flash
+        return "gemini-3.5-flash"
 
     def generate_text(
         self,
@@ -105,23 +83,14 @@ class LLMGateway:
         temperature: float = 0.2,
         max_tokens: int = 2048,
     ) -> LLMResponse[None]:
-        try:
-            return self.provider.generate_text(
-                system_prompt=system_prompt,
-                user_prompt=user_prompt,
-                model=model or self.default_model,
-                temperature=temperature,
-                max_tokens=max_tokens,
-            )
-        except Exception as e:
-            if self.secondary_provider:
-                return self.secondary_provider.generate_text(
-                    system_prompt=system_prompt,
-                    user_prompt=user_prompt,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                )
-            raise e
+        effective_model = self._resolve_model(model)
+        return self.provider.generate_text(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            model=effective_model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
 
     def generate_structured(
         self,
@@ -133,27 +102,16 @@ class LLMGateway:
         max_tokens: int = 4096,
         max_validation_retries: int = 2,
     ) -> LLMResponse[T]:
-        try:
-            return self.provider.generate_structured(
-                system_prompt=system_prompt,
-                user_prompt=user_prompt,
-                response_model=response_model,
-                model=model or self.default_model,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                max_validation_retries=max_validation_retries,
-            )
-        except Exception as e:
-            if self.secondary_provider:
-                return self.secondary_provider.generate_structured(
-                    system_prompt=system_prompt,
-                    user_prompt=user_prompt,
-                    response_model=response_model,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                    max_validation_retries=max_validation_retries,
-                )
-            raise e
+        effective_model = self._resolve_model(model)
+        return self.provider.generate_structured(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            response_model=response_model,
+            model=effective_model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            max_validation_retries=max_validation_retries,
+        )
 
 
 # Alias LLMProvider to LLMGateway for clean architectural naming
