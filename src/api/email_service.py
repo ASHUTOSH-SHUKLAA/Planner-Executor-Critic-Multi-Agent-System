@@ -17,7 +17,7 @@ logger = logging.getLogger("email_service")
 
 def is_smtp_configured() -> bool:
     """Check if outbound SMTP server credentials are provided in environment."""
-    load_dotenv(override=True)
+    load_dotenv()
     host = os.getenv("SMTP_HOST", "").strip()
     user = os.getenv("SMTP_USER", "").strip()
     password = os.getenv("SMTP_PASSWORD", "").strip()
@@ -150,7 +150,7 @@ def send_verification_email(
     Dispatches a verification email containing the 6-digit OTP code to the recipient.
     Returns (success: bool, status_message: str).
     """
-    load_dotenv(override=True)
+    load_dotenv()
     host = os.getenv("SMTP_HOST", "").strip()
     port = int(os.getenv("SMTP_PORT", "587"))
     user = os.getenv("SMTP_USER", "").strip()

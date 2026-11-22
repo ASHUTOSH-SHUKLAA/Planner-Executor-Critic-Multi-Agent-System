@@ -93,6 +93,10 @@ def health_check():
     # 3. File Storage Adapter Health Check
     storage_status = "in_memory_reports"
 
+    # 4. Outbound Email SMTP Health Check
+    from src.api.email_service import is_smtp_configured
+    smtp_status = "configured" if is_smtp_configured() else "unconfigured"
+
     all_healthy = db_healthy and queue_status != "connection_failed"
 
     return {
@@ -102,6 +106,7 @@ def health_check():
         "database": db_info if db_healthy else f"unhealthy: {db_info}",
         "queue": queue_status,
         "storage": storage_status,
+        "smtp": smtp_status,
     }
 
 
