@@ -5,9 +5,10 @@ and initializes database (PostgreSQL on Render or SQLite for local dev).
 """
 
 import os
+import re
 from contextlib import asynccontextmanager
 from typing import Optional
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.database import init_db, check_db_health
@@ -55,6 +56,15 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def clean_path_middleware(request: Request, call_next):
+    """Normalizes accidental duplicate slashes in URL paths (e.g. //api/auth/me -> /api/auth/me)."""
+    raw_path = request.scope.get("path", "")
+    if "//" in raw_path:
+        request.scope["path"] = re.sub(r"/+", "/", raw_path)
+    return await call_next(request)
 
 # Mount Routers
 app.include_router(auth_router)

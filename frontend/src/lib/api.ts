@@ -3,7 +3,8 @@
  * Strict JWT bearer token authentication, live web search telemetry, and admin analytics.
  */
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const rawBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_BASE_URL = rawBaseUrl.replace(/\/+$/, "");
 
 export function getProxiedImageUrl(src?: string): string {
   if (!src) return "";
