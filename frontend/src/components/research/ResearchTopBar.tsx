@@ -141,7 +141,7 @@ export function ResearchTopBar({
             aria-label="Stop research"
           >
             <Square className="h-3 w-3 fill-current" />
-            <span>Stop research</span>
+            <span>Stop<span className="hidden sm:inline"> research</span></span>
           </button>
         )}
 

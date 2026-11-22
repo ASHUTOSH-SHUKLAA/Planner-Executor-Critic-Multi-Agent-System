@@ -230,7 +230,79 @@ export default function HistoryPage() {
           </div>
         ) : (
           <div className="rounded-2xl border border-[#dce2ee] dark:border-[#303b58] bg-[#ffffff] dark:bg-[#0c1120] overflow-hidden shadow-xs">
-            <div className="overflow-x-auto">
+            {/* Mobile Cards List (< sm screens) */}
+            <div className="sm:hidden divide-y divide-[#dce2ee] dark:divide-[#303b58]">
+              {filteredWorkflows.map((wf) => (
+                <div
+                  key={wf.workflow_id}
+                  onClick={() => router.push(`/?workflow_id=${wf.workflow_id}`)}
+                  className="p-4 hover:bg-[#f4f6fb] dark:hover:bg-[#1b2438] transition-colors cursor-pointer space-y-2.5"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-xs font-semibold text-[#1b2235] dark:text-[#ffffff] line-clamp-2 leading-snug">
+                        {wf.task || "Untitled Research"}
+                      </h4>
+                      <p className="text-[10px] text-[#626b82] font-mono mt-0.5">
+                        ID: {wf.workflow_id}
+                      </p>
+                    </div>
+                    <span
+                      className={`shrink-0 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                        wf.status === "COMPLETED"
+                          ? "bg-[#efedff] dark:bg-[#8980d8]/20 text-[#6259b5] dark:text-[#c6c2fa] border border-[#6259b5]/30"
+                          : wf.status === "FAILED"
+                          ? "bg-[#D62832]/10 text-[#D62832] border border-[#D62832]/30"
+                          : "bg-[#12b9d5]/15 text-[#12b9d5] border border-[#12b9d5]/30"
+                      }`}
+                    >
+                      {wf.status === "COMPLETED" ? (
+                        <CheckCircle2 className="h-3 w-3" />
+                      ) : wf.status === "FAILED" ? (
+                        <XCircle className="h-3 w-3" />
+                      ) : (
+                        <Clock className="h-3 w-3 animate-spin" />
+                      )}
+                      <span>{wf.status}</span>
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] text-[#626b82] dark:text-[#a9b2c6] pt-1">
+                    <div className="flex items-center gap-2 font-mono text-[10px]">
+                      <span>{(wf.total_tokens ?? 0).toLocaleString()} tok</span>
+                      <span>•</span>
+                      <span>${(wf.estimated_cost_usd ?? 0).toFixed(4)}</span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        onClick={() => router.push(`/?workflow_id=${wf.workflow_id}`)}
+                        className="px-2 py-1 rounded-lg border border-[#6259b5]/30 bg-[#efedff]/60 dark:bg-[#8980d8]/20 text-[10px] font-semibold text-[#6259b5] dark:text-[#c6c2fa]"
+                      >
+                        View
+                      </button>
+                      <button
+                        onClick={() => handleDownload(wf.workflow_id, "pdf")}
+                        disabled={downloadingId === `${wf.workflow_id}_pdf`}
+                        className="px-2 py-1 rounded-lg border border-[#dce2ee] dark:border-[#303b58] bg-[#ffffff] dark:bg-[#1b2438] text-[10px] font-medium text-rose-500"
+                      >
+                        PDF
+                      </button>
+                      <button
+                        onClick={() => handleDownload(wf.workflow_id, "md")}
+                        disabled={downloadingId === `${wf.workflow_id}_md`}
+                        className="px-2 py-1 rounded-lg border border-[#dce2ee] dark:border-[#303b58] bg-[#ffffff] dark:bg-[#1b2438] text-[10px] font-medium text-[#6259b5]"
+                      >
+                        MD
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop / Tablet Table (Hidden on < sm screens) */}
+            <div className="hidden sm:block overflow-x-auto">
               <table className="w-full text-left text-xs text-[#1b2235] dark:text-[#ffffff]">
                 <thead className="bg-[#eef1f8] dark:bg-[#1b2438] border-b border-[#dce2ee] dark:border-[#303b58] text-[11px] font-semibold uppercase tracking-wider text-[#626b82] dark:text-[#a9b2c6]">
                   <tr>

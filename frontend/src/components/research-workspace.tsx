@@ -11,7 +11,7 @@ import { useToast } from "@/lib/toast-context";
 import { useSpeechToText } from "@/lib/use-speech-to-text";
 import { BrandMark } from "@/components/brand-mark";
 import { ResearchSidebar } from "@/components/research-sidebar";
-import { SidebarProvider } from "@/components/ui/sidebar";
+import { SidebarProvider, useSidebar } from "@/components/ui/sidebar";
 import { ResearchProgress } from "@/components/research-progress";
 import { ResearchLiveCockpit } from "@/components/research-live-cockpit";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -84,6 +84,9 @@ import {
   Trash2,
   X,
   TrendingUp,
+  Menu,
+  Share2,
+  ArrowLeft,
 } from "lucide-react";
 
 export interface ResearchActivityItem {
@@ -533,6 +536,184 @@ export interface FollowUpItem {
   suggested_questions?: string[];
   timestamp: string;
   status: "RUNNING" | "COMPLETED" | "FAILED";
+}
+
+function MobileWorkspaceHomeHeader({
+  onNewResearch,
+  onOpenSavedReports,
+  savedReportsCount,
+}: {
+  onNewResearch: () => void;
+  onOpenSavedReports: () => void;
+  savedReportsCount: number;
+}) {
+  const { setOpenMobile } = useSidebar();
+
+  return (
+    <header className="flex md:hidden items-center justify-between h-14 px-3.5 border-b border-[var(--border)] bg-[var(--surface)]/90 backdrop-blur-md sticky top-0 z-30 shrink-0 transition-colors">
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setOpenMobile(true)}
+          aria-label="Open navigation menu"
+          title="Open navigation menu"
+          className="p-2 -ml-1 rounded-xl text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+        <div className="flex items-center gap-2">
+          <BrandMark className="h-6 w-6 shrink-0" />
+          <span className="font-bold text-sm text-[var(--text)] tracking-tight">Synora</span>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={onNewResearch}
+          aria-label="Start new research"
+          title="Start new research"
+          className="p-2 rounded-xl text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer"
+        >
+          <Plus className="h-5 w-5" />
+        </button>
+        {savedReportsCount > 0 && (
+          <button
+            type="button"
+            onClick={onOpenSavedReports}
+            aria-label="Saved reports"
+            title="Saved reports"
+            className="p-2 rounded-xl text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer relative"
+          >
+            <Bookmark className="h-4.5 w-4.5" />
+            <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-[var(--accent)]" />
+          </button>
+        )}
+        <ThemeToggle className="h-9 w-9 rounded-xl border-0 bg-transparent text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-hover)] shadow-none transition-colors" />
+      </div>
+    </header>
+  );
+}
+
+function MobileResearchActiveHeader({
+  activeTab,
+  onChangeTab,
+  sourcesCount,
+  onBack,
+  isRunning,
+  onStop,
+  isSaved,
+  onToggleSave,
+  onShare,
+}: {
+  activeTab: ResearchTabType;
+  onChangeTab: (tab: ResearchTabType) => void;
+  sourcesCount: number;
+  onBack: () => void;
+  isRunning?: boolean;
+  onStop?: () => void;
+  isSaved?: boolean;
+  onToggleSave?: () => void;
+  onShare?: () => void;
+}) {
+  const { setOpenMobile } = useSidebar();
+
+  return (
+    <header className="flex md:hidden items-center justify-between h-14 px-3 border-b border-[var(--border)] bg-[var(--surface)]/90 backdrop-blur-md sticky top-0 z-30 shrink-0 transition-colors gap-2">
+      <div className="flex items-center gap-1 shrink-0">
+        <button
+          type="button"
+          onClick={onBack}
+          aria-label="Back to workspace"
+          title="Back to workspace"
+          className="p-2 -ml-1 rounded-xl text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer"
+        >
+          <ArrowLeft className="h-4.5 w-4.5" />
+        </button>
+        <button
+          type="button"
+          onClick={() => setOpenMobile(true)}
+          aria-label="Open sidebar"
+          title="Open sidebar"
+          className="p-2 rounded-xl text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer"
+        >
+          <Menu className="h-4.5 w-4.5" />
+        </button>
+      </div>
+
+      {/* Center Tab Navigation */}
+      <nav className="flex items-center gap-1 bg-[var(--surface-hover)] p-1 rounded-xl border border-[var(--border)]" aria-label="Research views">
+        <button
+          type="button"
+          onClick={() => onChangeTab("answer")}
+          className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+            activeTab === "answer"
+              ? "bg-[var(--surface)] text-[var(--text)] shadow-xs"
+              : "text-[var(--text-muted)] hover:text-[var(--text)]"
+          }`}
+        >
+          Report
+        </button>
+        <button
+          type="button"
+          onClick={() => onChangeTab("sources")}
+          className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+            activeTab === "sources"
+              ? "bg-[var(--surface)] text-[var(--text)] shadow-xs"
+              : "text-[var(--text-muted)] hover:text-[var(--text)]"
+          }`}
+        >
+          <span>Sources</span>
+          {sourcesCount > 0 && (
+            <span className="font-mono text-[10px] px-1 py-0.2 rounded-full bg-[var(--accent)]/15 text-[var(--accent)]">
+              {sourcesCount}
+            </span>
+          )}
+        </button>
+      </nav>
+
+      {/* Right Actions */}
+      <div className="flex items-center gap-1 shrink-0">
+        {isRunning && onStop && (
+          <button
+            type="button"
+            onClick={onStop}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-xl border border-red-500/40 bg-red-500/10 text-red-600 dark:text-red-400 text-xs font-semibold cursor-pointer"
+            title="Stop research"
+          >
+            <Square className="h-3 w-3 fill-current" />
+            <span>Stop</span>
+          </button>
+        )}
+        {onToggleSave && (
+          <button
+            type="button"
+            onClick={onToggleSave}
+            className={`p-2 rounded-xl transition-colors cursor-pointer ${
+              isSaved
+                ? "text-[var(--accent)] bg-[var(--accent)]/10"
+                : "text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-hover)]"
+            }`}
+            title={isSaved ? "Saved in bookmarks" : "Save bookmark"}
+            aria-label={isSaved ? "Saved in bookmarks" : "Save bookmark"}
+          >
+            <Bookmark className={`h-4 w-4 ${isSaved ? "fill-current" : ""}`} />
+          </button>
+        )}
+        {onShare && (
+          <button
+            type="button"
+            onClick={onShare}
+            className="p-2 rounded-xl text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer"
+            title="Share report"
+            aria-label="Share report"
+          >
+            <Share2 className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+    </header>
+  );
 }
 
 export function ResearchWorkspace() {
@@ -1157,10 +1338,39 @@ export function ResearchWorkspace() {
         ref={workspaceScrollRef}
         className={`flex-1 flex flex-col min-w-0 h-screen max-h-screen ${isResearchActive ? "overflow-hidden overscroll-none" : "overflow-y-auto no-scrollbar"}`}
       >
-        {!isResearchActive && (
-          <div className="workspace-theme-control" aria-label="Appearance settings">
-            <ThemeToggle className="h-10 w-10 rounded-xl border-0 bg-transparent text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-hover)] shadow-none transition-colors" />
-          </div>
+        {!isResearchActive ? (
+          <>
+            <MobileWorkspaceHomeHeader
+              onNewResearch={handleResetToNewResearch}
+              onOpenSavedReports={() => setIsSavedReportsModalOpen(true)}
+              savedReportsCount={savedReports.length}
+            />
+            <div className="workspace-theme-control hidden md:flex" aria-label="Appearance settings">
+              <ThemeToggle className="h-10 w-10 rounded-xl border-0 bg-transparent text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-hover)] shadow-none transition-colors" />
+            </div>
+          </>
+        ) : (
+          <MobileResearchActiveHeader
+            activeTab={activeTab}
+            onChangeTab={setActiveTab}
+            sourcesCount={viewModel.sources.length}
+            onBack={handleResetToNewResearch}
+            isRunning={isRunning}
+            onStop={handleUserStop}
+            isSaved={isCurrentReportSaved}
+            onToggleSave={() => {
+              const targetId = workflowState?.workflow_id || activeWorkflowId;
+              if (targetId) {
+                toggleSaveReport(targetId, workflowState?.task || goal, viewModel.sources.length);
+              }
+            }}
+            onShare={() => {
+              if (typeof window !== "undefined" && navigator.clipboard) {
+                navigator.clipboard.writeText(window.location.href);
+                success("Report URL copied to clipboard!", "Share");
+              }
+            }}
+          />
         )}
         {/* Main Content Area */}
         <main
@@ -1523,90 +1733,109 @@ export function ResearchWorkspace() {
                   {/* Left Column: Full-space Report & Research Flow - ONLY this column scrolls vertically */}
                   <div
                     ref={leftColumnScrollRef}
-                    className="flex-1 min-w-0 h-full overflow-y-auto overflow-x-hidden overscroll-contain no-scrollbar pr-2 space-y-4"
+                    className="flex-1 min-w-0 h-full overflow-y-auto overflow-x-hidden overscroll-contain no-scrollbar pr-1 sm:pr-2 space-y-4"
                   >
-                    <div className="space-y-4 pb-4">
-                      {/* 1. Rounded Question Message Card with Stop research button */}
-                      <QuestionCard
-                        question={workflowState?.task || goal}
-                        onEdit={(newQ) => {
-                          setGoal(newQ);
-                          executeResearchWithAttachment(newQ);
-                        }}
-                        onRerun={(q) => executeResearchWithAttachment(q)}
-                        isReadOnly={isRunning}
-                        isRunning={isRunning}
-                        onStop={handleUserStop}
-                      />
-
-                      {/* 2. Progress Line: compact single row */}
-                      <ResearchProgressRow
-                        phase={viewModel.phase}
-                        statusText={viewModel.statusText}
-                        elapsedSeconds={viewModel.elapsedSeconds}
-                        sourcesCount={viewModel.sources.length}
-                        isExpanded={isStepsExpanded}
-                        onToggleExpanded={() => setIsStepsExpanded(!isStepsExpanded)}
-                        hasSteps={viewModel.steps.length > 0}
-                      />
-
-                      {/* "Show steps" expanded checklist view with smooth height transition */}
-                      <div
-                        className={`grid transition-[grid-template-rows,opacity,margin] duration-250 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-                          isStepsExpanded && viewModel.steps.length > 0
-                            ? "grid-rows-[1fr] opacity-100 mt-2"
-                            : "grid-rows-[0fr] opacity-0 mt-0 pointer-events-none"
-                        }`}
-                      >
-                        <div className="overflow-hidden">
-                          {viewModel.steps.length > 0 && (
-                            <StepsChecklist
-                              steps={viewModel.steps}
-                            />
-                          )}
-                        </div>
+                    {activeTab === "sources" ? (
+                      <div className="py-2 animate-in fade-in duration-150">
+                        <SourcesTabContent sources={viewModel.sources} />
                       </div>
-
-                      {/* Stopped State Notification */}
-                      {isStopped && (
-                        <StoppedState
-                          onEditQuestion={() => {
-                            inputRef.current?.focus();
+                    ) : (
+                      <div className="space-y-4 pb-4">
+                        {/* 1. Rounded Question Message Card with Stop research button */}
+                        <QuestionCard
+                          question={workflowState?.task || goal}
+                          onEdit={(newQ) => {
+                            setGoal(newQ);
+                            executeResearchWithAttachment(newQ);
                           }}
-                          onRerun={() => {
-                            setIsStopped(false);
-                            executeResearchWithAttachment(workflowState?.task || goal);
-                          }}
+                          onRerun={(q) => executeResearchWithAttachment(q)}
+                          isReadOnly={isRunning}
+                          isRunning={isRunning}
+                          onStop={handleUserStop}
                         />
-                      )}
 
-                      {/* 3. Subtle answer skeleton before answer is synthesized */}
-                      {!workflowState?.final_result && !isStopped && (
-                        <AnswerSkeleton />
-                      )}
+                        {/* 2. Progress Line: compact single row */}
+                        <ResearchProgressRow
+                          phase={viewModel.phase}
+                          statusText={viewModel.statusText}
+                          elapsedSeconds={viewModel.elapsedSeconds}
+                          sourcesCount={viewModel.sources.length}
+                          isExpanded={isStepsExpanded}
+                          onToggleExpanded={() => setIsStepsExpanded(!isStepsExpanded)}
+                          hasSteps={viewModel.steps.length > 0}
+                        />
 
-                      {/* Completed Answer Markdown Report */}
-                      {workflowState?.final_result && (
+                        {/* "Show steps" expanded checklist view with smooth height transition */}
                         <div
-                          ref={reportRef}
-                          id="research-report-section"
-                          className="mt-4 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6 sm:p-8 shadow-xs space-y-6 w-full animate-in fade-in duration-200"
+                          className={`grid transition-[grid-template-rows,opacity,margin] duration-250 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+                            isStepsExpanded && viewModel.steps.length > 0
+                              ? "grid-rows-[1fr] opacity-100 mt-2"
+                              : "grid-rows-[0fr] opacity-0 mt-0 pointer-events-none"
+                          }`}
                         >
-                          <AnswerBody
-                            markdown={workflowState.final_result}
-                            sources={viewModel.sources}
-                            highlightedDomain={highlightedDomain}
-                            onHoverDomain={setHighlightedDomain}
-                          />
+                          <div className="overflow-hidden">
+                            {viewModel.steps.length > 0 && (
+                              <StepsChecklist
+                                steps={viewModel.steps}
+                              />
+                            )}
+                          </div>
                         </div>
-                      )}
 
-                      {/* Threaded Follow-Up Conversations */}
-                      {followUps.length > 0 && (
-                        <div ref={followUpContainerRef} className="scroll-mt-4">
-                          <ConversationThread
-                            key={workflowState?.workflow_id || "conversation-thread"}
-                            turns={followUps}
+                        {/* Stopped State Notification */}
+                        {isStopped && (
+                          <StoppedState
+                            onEditQuestion={() => {
+                              inputRef.current?.focus();
+                            }}
+                            onRerun={() => {
+                              setIsStopped(false);
+                              executeResearchWithAttachment(workflowState?.task || goal);
+                            }}
+                          />
+                        )}
+
+                        {/* 3. Subtle answer skeleton before answer is synthesized */}
+                        {!workflowState?.final_result && !isStopped && (
+                          <AnswerSkeleton />
+                        )}
+
+                        {/* Completed Answer Markdown Report */}
+                        {workflowState?.final_result && (
+                          <div
+                            ref={reportRef}
+                            id="research-report-section"
+                            className="mt-4 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 sm:p-6 md:p-8 shadow-xs space-y-6 w-full animate-in fade-in duration-200"
+                          >
+                            <AnswerBody
+                              markdown={workflowState.final_result}
+                              sources={viewModel.sources}
+                              highlightedDomain={highlightedDomain}
+                              onHoverDomain={setHighlightedDomain}
+                            />
+                          </div>
+                        )}
+
+                        {/* Threaded Follow-Up Conversations */}
+                        {followUps.length > 0 && (
+                          <div ref={followUpContainerRef} className="scroll-mt-4">
+                            <ConversationThread
+                              key={workflowState?.workflow_id || "conversation-thread"}
+                              turns={followUps}
+                              onSelectQuestion={(q) => {
+                                handleFollowUpSubmit(q);
+                                setTimeout(scrollToActiveFollowUp, 50);
+                                setTimeout(scrollToActiveFollowUp, 200);
+                              }}
+                              disabled={isFollowUpRunning}
+                            />
+                          </div>
+                        )}
+
+                        {/* Related Questions (rows with ↳ icon) */}
+                        {relatedPrompts.length > 0 && !isRunning && (
+                          <RelatedQuestions
+                            questions={relatedPrompts}
                             onSelectQuestion={(q) => {
                               handleFollowUpSubmit(q);
                               setTimeout(scrollToActiveFollowUp, 50);
@@ -1614,22 +1843,9 @@ export function ResearchWorkspace() {
                             }}
                             disabled={isFollowUpRunning}
                           />
-                        </div>
-                      )}
-
-                      {/* Related Questions (rows with ↳ icon) */}
-                      {relatedPrompts.length > 0 && !isRunning && (
-                        <RelatedQuestions
-                          questions={relatedPrompts}
-                          onSelectQuestion={(q) => {
-                            handleFollowUpSubmit(q);
-                            setTimeout(scrollToActiveFollowUp, 50);
-                            setTimeout(scrollToActiveFollowUp, 200);
-                          }}
-                          disabled={isFollowUpRunning}
-                        />
-                      )}
-                    </div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* Sources Panel on right: pinned to the far right, sticky in place with independent scrolling */}
@@ -1667,10 +1883,10 @@ export function ResearchWorkspace() {
                 </div>
 
                 {/* 4. Sticky Follow-up Bar: Full-width Horizontal Rectangular Bar with complete text visibility */}
-                <div className="shrink-0 z-20 w-full pl-4 sm:pl-6 lg:pl-8 pr-2 sm:pr-3 lg:pr-3 pt-2 pb-3 bg-[var(--bg)]/95 backdrop-blur-xs border-none">
+                <div className="shrink-0 z-20 w-full pl-3 sm:pl-6 lg:pl-8 pr-3 sm:pr-3 lg:pr-3 pt-2 pb-3 pb-[max(12px,env(safe-area-inset-bottom))] bg-[var(--bg)]/95 backdrop-blur-xs border-none">
                   <div className="w-full followup-composer-container">
-                    <div className="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl border border-[var(--border)] bg-[var(--surface-elevated)] shadow-md hover:border-[var(--border-strong)] transition-all">
-                      <MessageSquare className="h-5 w-5 text-[var(--text-muted)] shrink-0" strokeWidth={1.5} />
+                    <div className="w-full flex items-center gap-2.5 sm:gap-3 px-3 sm:px-4 py-2 sm:py-2.5 rounded-2xl border border-[var(--border)] bg-[var(--surface-elevated)] shadow-md hover:border-[var(--border-strong)] transition-all">
+                      <MessageSquare className="h-4.5 w-4.5 sm:h-5 sm:w-5 text-[var(--text-muted)] shrink-0" strokeWidth={1.5} />
                       <input
                         type="text"
                         value={followUpQuery}
@@ -1694,13 +1910,13 @@ export function ResearchWorkspace() {
                         style={{ outline: "none", boxShadow: "none", border: "none" }}
                       />
 
-                      <div className="flex items-center gap-2 shrink-0">
+                      <div className="flex items-center gap-1 sm:gap-2 shrink-0">
                         {/* Mic for follow-up */}
                         <button
                           type="button"
                           onClick={handleToggleMic}
                           disabled={isRunning || isFollowUpRunning}
-                          className={`p-2 rounded-xl text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer ${isListening ? "text-red-500 bg-red-50 dark:bg-red-950/40" : ""
+                          className={`p-1.5 sm:p-2 rounded-xl text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer ${isListening ? "text-red-500 bg-red-50 dark:bg-red-950/40" : ""
                             }`}
                           title="Voice input (Speech-to-Text)"
                           aria-label="Voice input"
@@ -1718,12 +1934,12 @@ export function ResearchWorkspace() {
                           }}
                           aria-label="Submit follow-up"
                           title="Submit follow-up (Enter)"
-                          className={`h-9 px-3.5 rounded-xl flex items-center gap-1.5 text-xs font-semibold transition-all shrink-0 ${followUpQuery.trim() && !isRunning && !isFollowUpRunning
+                          className={`h-9 px-2.5 sm:px-3.5 rounded-xl flex items-center gap-1.5 text-xs font-semibold transition-all shrink-0 ${followUpQuery.trim() && !isRunning && !isFollowUpRunning
                             ? "bg-[var(--accent)] text-[var(--accent-fg)] hover:opacity-90 shadow-xs cursor-pointer"
                             : "bg-[var(--surface-hover)] text-[var(--text-muted)] opacity-50 cursor-not-allowed"
                             }`}
                         >
-                          <span>Submit</span>
+                          <span className="hidden sm:inline">Submit</span>
                           <ArrowRight className="h-3.5 w-3.5" strokeWidth={2} />
                         </button>
                       </div>

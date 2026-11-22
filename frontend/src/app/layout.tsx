@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
 import { ThemeProvider } from "@/lib/theme-context";
@@ -7,6 +7,17 @@ import { ResearchProvider } from "@/lib/research-context";
 import { ToastContainer } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ACTIVE_TYPOGRAPHY_PAIRING, TYPOGRAPHY_PAIRINGS } from "@/lib/typography-config";
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f7f5f0" },
+    { media: "(prefers-color-scheme: dark)", color: "#0c1120" },
+  ],
+};
 
 export const metadata: Metadata = {
   applicationName: "Synora",
