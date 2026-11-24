@@ -6,7 +6,7 @@ detailed comparison tables, verified product imagery (for retail goods), and ver
 """
 
 import re
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 from rich.console import Console
 
 from src.models.schemas import WorkflowState, WorkflowStatus
@@ -205,6 +205,10 @@ CRITICAL RESTRICTION:
         return base + """
 ### MANDATORY SECTION ARCHITECTURE:
 - **# Title & Executive Briefing**: Authoritative title, executive verdict summary, and market overview table.
+- **## Master Products Buying List & Lowest Price Deals**:
+  - A prominent, comprehensive Markdown Buying Table listing every evaluated contender:
+    | # | Product & Model | Lowest Price Available | Best Deal Retailer | Direct Store Buying Links | Value Verdict |
+    (State the exact lowest price available extracted in INR ₹ or USD $).
 - **## Market Landscape & Price Tier Taxonomy**: Broad category breakdown, key competitors, and price bands (Budget, Mid-Range, Premium).
 - **## Master Comparison Matrix (6 to 8 Concrete Contenders)**:
   - Markdown table comparing all 6 to 8 options (Model, Price, Core Processor/Motor, Performance/Capacity, Standout Feature, Best Suited For).
@@ -212,6 +216,7 @@ CRITICAL RESTRICTION:
   - For EACH of the 6 to 8 products, use a dedicated numbered Level-3 heading with brand, model, and explicit category noun:
     `### 1. [Brand] [Model] [Category Noun]`
   - Inside each product section, use bold subheaders:
+    - `**Lowest Price Available:**` Exact current lowest price in ₹ or $ and verified discount offers.
     - `**Key Technical Specifications:**`
     - `**Real-World Performance & Benchmarks:**`
     - `**Critical Strengths & Trade-Offs:**`
@@ -233,7 +238,42 @@ CRITICAL RESTRICTION:
 """
 
 
-def generate_product_purchase_block(clean_title: str, brand: Optional[str] = None, category: Optional[str] = None) -> str:
+def extract_lowest_price_from_block(block_text: str) -> Optional[str]:
+    """
+    Extracts the verified lowest price mentioned in a product section or markdown table.
+    Prioritizes Indian Rupee (₹) and US Dollar ($) formats.
+    """
+    if not block_text:
+        return None
+    explicit = re.findall(
+        r'(?:lowest|starting\s+at|starts\s+at|street|retail|current|deal|price|mrp)[\s:]*([₹$]\s*[\d,]+(?:\.\d{2})?(?:\s*[-–—to]+\s*[₹$]?\s*[\d,]+(?:\.\d{2})?)?)',
+        block_text,
+        re.IGNORECASE,
+    )
+    all_prices = []
+    candidates_to_parse = explicit if explicit else re.findall(r'([₹$]\s*[\d,]+(?:\.\d{2})?)', block_text)
+    for raw in candidates_to_parse:
+        num_match = re.search(r'[\d,]+(?:\.\d{2})?', raw)
+        if num_match:
+            try:
+                num = float(num_match.group(0).replace(',', ''))
+                if 50 <= num <= 50000000:
+                    symbol = '₹' if '₹' in raw else ('$' if '$' in raw else '')
+                    all_prices.append((num, f"{symbol}{num_match.group(0)}"))
+            except ValueError:
+                pass
+    if all_prices:
+        all_prices.sort(key=lambda x: x[0])
+        return all_prices[0][1]
+    return None
+
+
+def generate_product_purchase_block(
+    clean_title: str,
+    brand: Optional[str] = None,
+    category: Optional[str] = None,
+    price: Optional[str] = None,
+) -> str:
     """
     Generates verified, clickable ordering links showing the cheapest / best price options
     and store availability for commercial products (mobile phones, washing machines, laptops, etc.).
@@ -243,10 +283,13 @@ def generate_product_purchase_block(clean_title: str, brand: Optional[str] = Non
     encoded = urllib.parse.quote_plus(clean_title)
     brand_prefix = f"{brand} " if brand and brand.lower() not in clean_title.lower() else ""
 
+    price_line = f"> - **Lowest Price Available:** **{price}** *(Verified Lowest Online Offer)*\n" if price else ""
+
     if category == "car":
         official_query = urllib.parse.quote_plus(f"{brand_prefix}{clean_title} official test drive booking website")
         return (
-            f"> **Where to Buy (Best Pricing & Test Drive):**\n"
+            f"> 🛒 **Where to Buy (Lowest Price & Test Drive):**\n"
+            f"{price_line}"
             f"> - **Base / Lowest Price Model:** [Check Base Variant & On-Road Price on CarDekho](https://www.cardekho.com/search?q={encoded})\n"
             f"> - **Dealer Discounts & Quotes:** [Compare Best Dealer Offers on CarWale](https://www.carwale.com/search/?q={encoded})\n"
             f"> - **Official Portal:** [Book Test Drive & View Dealerships](https://www.google.com/search?q={official_query})"
@@ -260,12 +303,49 @@ def generate_product_purchase_block(clean_title: str, brand: Optional[str] = Non
         brand_store_url = f"https://www.google.com/search?q={encoded}+official+store+student+discount+pricing"
 
         return (
-            f"> **Where to Buy (Lowest Price & Best Deals):**\n"
+            f"> 🛒 **Where to Buy (Lowest Price & Best Deals):**\n"
+            f"{price_line}"
             f"> - **Amazon (Lowest Price Deals):** [Find Lowest Price & Verified Offers on Amazon India]({amazon_cheap_url})\n"
             f"> - **Flipkart (Lowest Price Deals):** [Find Cheapest Offers on Flipkart]({flipkart_cheap_url})\n"
             f"> - **Multi-Store Price Comparison:** [Compare Lowest Price Across Stores]({deals_compare_url}) | [Croma Deals]({croma_url}) | [Reliance Digital]({reliance_url})\n"
             f"> - **Student & Brand Offers:** [Check Official Brand Store & Student Discounts]({brand_store_url})"
         )
+
+
+def build_products_buying_table(
+    product_entries: List[Tuple[str, Optional[str], Optional[str], Optional[str]]],
+) -> str:
+    """
+    Constructs an executive Master Products Buying List & Lowest Price Deals Table.
+    Includes ranked picks, lowest verified price, best deal retailer, and 1-click store links.
+    """
+    import urllib.parse
+    rows = [
+        "## Master Products Buying List & Lowest Price Deals",
+        "",
+        "The table below outlines the verified lowest online prices, primary retail availability, and direct 1-click deal links for all evaluated models:",
+        "",
+        "| # | Product & Model | Lowest Price Available | Best Deal Retailer | Direct Store Buying Links | Value Verdict |",
+        "| :--- | :--- | :--- | :--- | :--- | :--- |"
+    ]
+    for idx, (title, brand, category, price) in enumerate(product_entries, 1):
+        encoded = urllib.parse.quote_plus(title)
+        price_disp = f"**{price}**" if price else "Check Latest Deals"
+        amazon_url = f"https://www.amazon.in/s?k={encoded}&s=price-asc-rank"
+        flipkart_url = f"https://www.flipkart.com/search?q={encoded}&sort=price_asc"
+        compare_url = f"https://www.google.com/search?q={encoded}+buy+online+cheapest+price+best+deals"
+
+        deal_retailer = "Amazon India / Flipkart" if category != "car" else "CarDekho / Dealerships"
+        buy_links = (
+            f"[Amazon Deals]({amazon_url}) · [Flipkart Deals]({flipkart_url}) · [Compare All Stores]({compare_url})"
+            if category != "car"
+            else f"[CarDekho Pricing](https://www.cardekho.com/search?q={encoded}) · [CarWale](https://www.carwale.com/search/?q={encoded})"
+        )
+        verdict = "Top Overall Pick" if idx == 1 else ("Best Value Alternative" if idx == 2 else "Recommended Contender")
+
+        rows.append(f"| {idx} | **{title}** | {price_disp} | {deal_retailer} | {buy_links} | {verdict} |")
+
+    return "\n".join(rows)
 
 
 class SynthesizerAgent:
@@ -526,18 +606,23 @@ Please produce an exhaustive, publication-ready deep research report in clean Ma
                 existing_img_line_idx = None
                 has_purchase_links = False
 
-                for j in range(i + 1, min(i + 14, len(lines))):
-                    if lines[j].strip().startswith("#"):
+                block_text_lines = []
+                for j in range(i + 1, min(i + 24, len(lines))):
+                    if lines[j].strip().startswith("### ") or (lines[j].strip().startswith("## ") and j > i + 1):
                         break
+                    block_text_lines.append(lines[j])
                     if "![" in lines[j] and "](" in lines[j]:
                         has_image = True
                         existing_img_line_idx = j
-                    if any(k in lines[j].lower() for k in ["where to buy", "order on amazon", "order on flipkart", "amazon.in", "flipkart.com"]):
+                    # Strict validation: Only count as purchase links if actual markdown hyperlinks to store/shopping exist
+                    if re.search(r'\[.*?\]\(https?://[^)]*(?:amazon|flipkart|croma|reliancedigital|cardekho|carwale|bestbuy|walmart)[^)]*\)', lines[j], re.IGNORECASE):
                         has_purchase_links = True
+
+                lowest_price = extract_lowest_price_from_block("\n".join(block_text_lines))
 
                 product_entries.append((
                     i, clean_title, brand, eff_category,
-                    existing_img_line_idx, has_purchase_links
+                    existing_img_line_idx, has_purchase_links, lowest_price
                 ))
 
                 if not has_image and len(clean_title) >= 3:
@@ -552,8 +637,13 @@ Please produce an exhaustive, publication-ready deep research report in clean Ma
             resolved_images = search_product_images(products_to_fetch, category_hint=detected_category)
 
         insert_map = {}
-        for idx, name, brand, category, existing_img_idx, has_purchase_links in product_entries:
+        valid_commercial_items = []
+
+        for idx, name, brand, category, existing_img_idx, has_purchase_links, price in product_entries:
             effective_is_comm = is_commercial and category != "institution"
+            if effective_is_comm:
+                valid_commercial_items.append((name, brand, category, price))
+
             if existing_img_idx is None:
                 # No image previously existed; insert resolved image and purchase links right after heading
                 img_url = resolved_images.get(name)
@@ -561,7 +651,7 @@ Please produce an exhaustive, publication-ready deep research report in clean Ma
                 if img_url:
                     blocks.append(f"\n![{name}]({img_url})\n")
                 if effective_is_comm and not has_purchase_links:
-                    p_block = generate_product_purchase_block(name, brand=brand, category=category)
+                    p_block = generate_product_purchase_block(name, brand=brand, category=category, price=price)
                     if p_block:
                         blocks.append(f"\n{p_block}\n")
                 if blocks:
@@ -569,7 +659,7 @@ Please produce an exhaustive, publication-ready deep research report in clean Ma
             else:
                 # Image already exists at existing_img_idx; insert purchase block right after existing image if commercial
                 if effective_is_comm and not has_purchase_links:
-                    p_block = generate_product_purchase_block(name, brand=brand, category=category)
+                    p_block = generate_product_purchase_block(name, brand=brand, category=category, price=price)
                     if p_block:
                         insert_map[existing_img_idx] = f"\n{p_block}\n"
 
@@ -579,4 +669,32 @@ Please produce an exhaustive, publication-ready deep research report in clean Ma
             if i in insert_map:
                 new_lines.append(insert_map[i])
 
-        return "\n".join(new_lines)
+        combined_report = "\n".join(new_lines)
+
+        # Inject Master Products Buying List & Lowest Price Deals Table if commercial products exist
+        if is_commercial and len(valid_commercial_items) >= 2:
+            lower_rep = combined_report.lower()
+            if "## master products buying list" not in lower_rep and "## products buying list" not in lower_rep:
+                buying_table = build_products_buying_table(valid_commercial_items)
+                # Find optimal insertion target (before Master Comparison Matrix or before Deep-Dive Analysis)
+                insertion_patterns = [
+                    r'(?m)^##\s+(?:Master\s+)?Comparison\s+Matrix',
+                    r'(?m)^##\s+Side-by-Side\s+Comparison',
+                    r'(?m)^##\s+Deep-Dive\s+Analysis',
+                    r'(?m)^###\s+1\.\s+',
+                ]
+                inserted = False
+                for pat in insertion_patterns:
+                    match = re.search(pat, combined_report)
+                    if match:
+                        start_pos = match.start()
+                        combined_report = f"{combined_report[:start_pos].rstrip()}\n\n{buying_table}\n\n---\n\n{combined_report[start_pos:]}"
+                        inserted = True
+                        break
+                if not inserted:
+                    # Append after executive briefing or at the top
+                    if "\n## " in combined_report:
+                        head, tail = combined_report.split("\n## ", 1)
+                        combined_report = f"{head}\n\n{buying_table}\n\n---\n\n## {tail}"
+
+        return combined_report

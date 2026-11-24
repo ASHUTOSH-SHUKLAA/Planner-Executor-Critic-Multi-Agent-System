@@ -179,7 +179,11 @@ export function AnswerBody({
                 (lower.includes("amazon.") ||
                   lower.includes("flipkart.") ||
                   lower.includes("croma.") ||
-                  lower.includes("reliancedigital.")) &&
+                  lower.includes("reliancedigital.") ||
+                  lower.includes("cardekho.") ||
+                  lower.includes("carwale.") ||
+                  lower.includes("bestbuy.") ||
+                  lower.includes("walmart.")) &&
                 !isEdu;
 
               if (isRetail) {

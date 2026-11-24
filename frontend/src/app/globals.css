@@ -8605,6 +8605,15 @@ nextjs-portal,
     font-size: 11.5px !important;
     gap: 4px !important;
     max-width: 135px !important;
+    min-width: 0 !important;
+    flex-shrink: 1 !important;
+  }
+
+  .workspace-shell .composer-model-button span {
+    min-width: 0 !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
   }
 
   .workspace-shell .composer-attach-button,

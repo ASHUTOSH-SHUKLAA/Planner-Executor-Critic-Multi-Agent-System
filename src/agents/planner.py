@@ -133,7 +133,7 @@ class PlannerAgent:
                 "- Formulate EXACTLY 3 highly-concurrent parallel steps (all with dependencies: []) so research executes in a single fast wave:\n"
                 "  (1) Identify & Profile Top 6 to 8 Concrete Market Contenders: Research leading models currently on the market matching the user's budget and criteria (e.g. flagship killers under ₹50,000 for student workflows), exact specifications, hardware internals, and retail pricing. Dependencies: []\n"
                 "  (2) Real-World Benchmarks, Battery Life & Daily Performance: Deep-dive into empirical benchmark scores (AnTuTu, Geekbench), gaming/thermal endurance, display ergonomics, camera capabilities, and student productivity features. Dependencies: []\n"
-                "  (3) Pricing, Best Deals, Total Cost of Ownership & Value Proposition: Investigate current online discount deals (Amazon, Flipkart, student discount offers), warranty terms, long-term software update support (OS updates), and price-to-performance ratio. Dependencies: []\n"
+                "  (3) Pricing, Best Deals, Total Cost of Ownership & Lowest Available Prices: Investigate current lowest online prices and discount deals (Amazon, Flipkart, student discount offers, bank offers), warranty terms, long-term software update support (OS updates), and price-to-performance ratio across all contenders. Dependencies: []\n"
                 "- GEOGRAPHIC / CURRENCY ANCHORING: If the query mentions INR/Rupees (e.g. 'under 50 thousand', '₹50,000'), ground searches strictly in the Indian consumer retail market.\n"
                 "- NEVER create a 4th or 5th dependent step for final synthesis; the dedicated Synthesizer Agent does this at the end."
             )

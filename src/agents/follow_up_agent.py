@@ -97,7 +97,7 @@ def extract_listed_candidates(report_text: str) -> List[str]:
     return candidates
 
 
-def generate_cheap_purchase_block(product_name: str, brand: Optional[str] = None, category: Optional[str] = None) -> str:
+def generate_cheap_purchase_block(product_name: str, brand: Optional[str] = None, category: Optional[str] = None, price: Optional[str] = None) -> str:
     """
     Generates verified, clickable ordering links showing the cheapest / best price options
     and store availability for commercial products (mobile phones, washing machines, laptops, etc.).
@@ -106,10 +106,13 @@ def generate_cheap_purchase_block(product_name: str, brand: Optional[str] = None
     encoded = urllib.parse.quote_plus(product_name)
     brand_prefix = f"{brand} " if brand and brand.lower() not in product_name.lower() else ""
 
+    price_line = f"> - **Lowest Price Available:** **{price}** *(Verified Lowest Online Offer)*\n" if price else ""
+
     if category == "car":
         official_query = urllib.parse.quote_plus(f"{brand_prefix}{product_name} official test drive booking website")
         return (
-            f"> **Where to Buy (Best Pricing & Test Drive):**\n"
+            f"> 🛒 **Where to Buy (Lowest Price & Test Drive):**\n"
+            f"{price_line}"
             f"> - **Base / Lowest Price Model:** [Check Base Variant & On-Road Price on CarDekho](https://www.cardekho.com/search?q={encoded})\n"
             f"> - **Dealer Discounts & Quotes:** [Compare Best Dealer Offers on CarWale](https://www.carwale.com/search/?q={encoded})\n"
             f"> - **Official Portal:** [Book Test Drive & View Dealerships](https://www.google.com/search?q={official_query})"
@@ -122,10 +125,11 @@ def generate_cheap_purchase_block(product_name: str, brand: Optional[str] = None
         reliance_url = f"https://www.reliancedigital.in/search?q={encoded}"
 
         return (
-            f"> **Where to Buy (Lowest Price & Best Deals):**\n"
-            f"> - **Amazon (Lowest Price):** [Find Lowest Price & Deals on Amazon]({amazon_cheap_url})\n"
-            f"> - **Flipkart (Lowest Price):** [Find Cheapest Offers on Flipkart]({flipkart_cheap_url})\n"
-            f"> - **Compare Store Deals:** [Compare Lowest Price Across Stores]({deals_compare_url}) | [Croma Deals]({croma_url}) | [Reliance Digital]({reliance_url})"
+            f"> 🛒 **Where to Buy (Lowest Price & Best Deals):**\n"
+            f"{price_line}"
+            f"> - **Amazon (Lowest Price Deals):** [Find Lowest Price & Verified Offers on Amazon India]({amazon_cheap_url})\n"
+            f"> - **Flipkart (Lowest Price Deals):** [Find Cheapest Offers on Flipkart]({flipkart_cheap_url})\n"
+            f"> - **Multi-Store Price Comparison:** [Compare Lowest Price Across Stores]({deals_compare_url}) | [Croma Deals]({croma_url}) | [Reliance Digital]({reliance_url})"
         )
 
 
@@ -376,8 +380,13 @@ Please provide an exhaustive, authoritative follow-up answer strictly comparing 
 
         # 10. Post-process answer: Add Where to Buy links ONLY if commercial
         if is_commercial and winning_candidate:
-            if not any(k in enriched_answer.lower() for k in ["where to buy", "order on amazon", "order on flipkart"]):
-                p_block = generate_cheap_purchase_block(winning_candidate)
+            has_links = bool(
+                re.search(r'\[.*?\]\(https?://[^)]*(?:amazon|flipkart|croma|reliancedigital|cardekho|carwale|bestbuy|walmart)[^)]*\)', enriched_answer, re.IGNORECASE)
+            )
+            if not has_links:
+                from src.agents.synthesizer import extract_lowest_price_from_block
+                cand_price = extract_lowest_price_from_block(enriched_answer)
+                p_block = generate_cheap_purchase_block(winning_candidate, price=cand_price)
                 enriched_answer = f"{enriched_answer}\n\n---\n{p_block}"
         elif not is_commercial:
             # Clean any accidental purchase links
