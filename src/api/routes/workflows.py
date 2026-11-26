@@ -162,6 +162,14 @@ def download_workflow_report(
         extra={"workflow_id": workflow_id},
     )
 
+    # Build a clean, research-question-based filename slug (e.g. 'best-laptop-under-100000.pdf')
+    import re
+    raw_slug = re.sub(r"[^\w\s-]", "", task_title).strip().lower()
+    clean_slug = re.sub(r"[-\s]+", "-", raw_slug)[:55].strip("-")
+    if not clean_slug:
+        clean_slug = f"synora_report_{workflow_id[:8]}"
+    download_filename = f"{clean_slug}.{format}"
+
     if format == "pdf":
         from src.tools.pdf_generator import generate_workflow_pdf
         pdf_bytes = generate_workflow_pdf(
@@ -176,7 +184,10 @@ def download_workflow_report(
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",
-            headers={"Content-Disposition": f'attachment; filename="synora_{workflow_id}.pdf"'},
+            headers={
+                "Content-Disposition": f'attachment; filename="{download_filename}"',
+                "Access-Control-Expose-Headers": "Content-Disposition",
+            },
         )
 
     # Format document for Markdown / Text export
@@ -203,13 +214,15 @@ def download_workflow_report(
                 lines.append(f"   > \"{snippet}\"\n")
 
     content = "\n".join(lines)
-    filename = f"synora_{workflow_id}.{format}"
     media_type = "text/markdown" if format == "md" else "text/plain"
 
     return Response(
         content=content,
         media_type=media_type,
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={
+            "Content-Disposition": f'attachment; filename="{download_filename}"',
+            "Access-Control-Expose-Headers": "Content-Disposition",
+        },
     )
 
 

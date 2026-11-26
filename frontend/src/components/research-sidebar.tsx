@@ -179,134 +179,134 @@ export function ResearchSidebar({
 
   return (
     <>
-    <Sidebar
-      data-workspace-sidebar="true"
-      collapsible="icon"
-      variant="sidebar"
-      className={`workspace-sidebar ${!mounted ? "is-initial-load" : ""}`}
-    >
-      <SidebarHeader className={`workspace-sidebar-header ${isCollapsed ? "is-collapsed" : ""}`}>
-        <div className="sidebar-brand-row">
-          <button
-            type="button"
-            className="sidebar-brand cursor-pointer bg-transparent border-0 p-0 text-left"
-            onClick={isCollapsed ? toggleSidebar : undefined}
-            title={isCollapsed ? "Expand sidebar (⌘B)" : undefined}
-          >
-            <div className="sidebar-brand-icon-wrap flex items-center justify-center h-8 w-8 shrink-0">
-              <BrandMark className="sidebar-expand-mark h-8 w-8 shrink-0" />
-            </div>
-            <span className="sidebar-brand-copy overflow-hidden whitespace-nowrap">
-              <span className="sidebar-brand-name font-bold tracking-tight text-sm">Synora</span>
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={toggleSidebar}
-            className="sidebar-collapse-button shrink-0"
-            title="Collapse sidebar (⌘B)"
-            aria-label="Collapse sidebar"
-            tabIndex={isCollapsed ? -1 : 0}
-          >
-            <PanelLeftClose className="h-4 w-4" aria-hidden="true" strokeWidth={1.5} />
-          </button>
-        </div>
-      </SidebarHeader>
+      <Sidebar
+        data-workspace-sidebar="true"
+        collapsible="icon"
+        variant="sidebar"
+        className={`workspace-sidebar ${!mounted ? "is-initial-load" : ""}`}
+      >
+        <SidebarHeader className={`workspace-sidebar-header ${isCollapsed ? "is-collapsed" : ""}`}>
+          <div className="sidebar-brand-row">
+            <button
+              type="button"
+              className="sidebar-brand cursor-pointer bg-transparent border-0 p-0 text-left"
+              onClick={isCollapsed ? toggleSidebar : undefined}
+              title={isCollapsed ? "Expand sidebar (⌘B)" : undefined}
+            >
+              <div className="sidebar-brand-icon-wrap flex items-center justify-center h-8 w-8 shrink-0">
+                <BrandMark className="sidebar-expand-mark h-8 w-8 shrink-0" />
+              </div>
+              <span className="sidebar-brand-copy overflow-hidden whitespace-nowrap">
+                <span className="sidebar-brand-name font-bold tracking-tight text-sm">Synora</span>
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={toggleSidebar}
+              className="sidebar-collapse-button shrink-0"
+              title="Collapse sidebar (⌘B)"
+              aria-label="Collapse sidebar"
+              tabIndex={isCollapsed ? -1 : 0}
+            >
+              <PanelLeftClose className="h-4 w-4" aria-hidden="true" strokeWidth={1.5} />
+            </button>
+          </div>
+        </SidebarHeader>
 
-      <SidebarContent className="workspace-sidebar-content">
-        <SidebarGroup className="sidebar-navigation-group">
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  onClick={() => {
-                    onNewResearch();
-                    if (typeof window !== "undefined" && window.location.pathname !== "/") {
-                      router.push("/");
-                    }
-                    closeMobile();
-                  }}
-                  className="workspace-nav-new cursor-pointer"
-                  tooltip="New research (⌘K)"
-                  size="default"
-                >
-                  <Plus className="h-5 w-5" strokeWidth={2.2} />
-                  <span>New research</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        <SidebarContent className="workspace-sidebar-content">
+          <SidebarGroup className="sidebar-navigation-group">
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    onClick={() => {
+                      onNewResearch();
+                      if (typeof window !== "undefined" && window.location.pathname !== "/") {
+                        router.push("/");
+                      }
+                      closeMobile();
+                    }}
+                    className="workspace-nav-new cursor-pointer"
+                    tooltip="New research (⌘K)"
+                    size="default"
+                  >
+                    <Plus className="h-5 w-5" strokeWidth={2.2} />
+                    <span>New research</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
 
-        <SidebarGroup className="sidebar-library-group">
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  onClick={() => {
-                    onOpenSavedReports?.();
-                    closeMobile();
-                  }}
-                  className="workspace-nav-saved cursor-pointer"
-                  tooltip="Saved reports"
-                  size="default"
-                >
-                  <Bookmark className="h-5 w-5" strokeWidth={1.75} />
-                  <span>Saved Reports</span>
-                </SidebarMenuButton>
-                {savedReportsCount > 0 && (
-                  <SidebarMenuBadge className={`sidebar-menu-count transition-opacity duration-200 ${isCollapsed ? "opacity-0 pointer-events-none" : "opacity-100"}`}>
-                    {savedReportsCount}
-                  </SidebarMenuBadge>
-                )}
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+          <SidebarGroup className="sidebar-library-group">
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    onClick={() => {
+                      onOpenSavedReports?.();
+                      closeMobile();
+                    }}
+                    className="workspace-nav-saved cursor-pointer"
+                    tooltip="Saved reports"
+                    size="default"
+                  >
+                    <Bookmark className="h-5 w-5" strokeWidth={1.75} />
+                    <span>Saved Reports</span>
+                  </SidebarMenuButton>
+                  {savedReportsCount > 0 && (
+                    <SidebarMenuBadge className={`sidebar-menu-count transition-opacity duration-200 ${isCollapsed ? "opacity-0 pointer-events-none" : "opacity-100"}`}>
+                      {savedReportsCount}
+                    </SidebarMenuBadge>
+                  )}
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
 
-        <SidebarGroup className={`sidebar-recent-group ${isHistoryExpanded ? "is-expanded" : ""} transition-all duration-300`}>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem className="relative">
-                <SidebarMenuButton
-                  onClick={() => {
-                    router.push("/history");
-                    closeMobile();
-                  }}
-                  className="workspace-nav-history cursor-pointer"
-                  tooltip="Research history"
-                  size="default"
-                >
-                  <History className="h-5 w-5" strokeWidth={1.75} />
-                  <span>Research history</span>
-                </SidebarMenuButton>
-                <button
-                  type="button"
-                  className="sidebar-history-toggle-bar"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsHistoryExpanded((expanded) => !expanded);
-                  }}
-                  aria-controls="sidebar-research-history"
-                  aria-expanded={isHistoryExpanded}
-                  title={isHistoryExpanded ? "Collapse inline searches" : "Show all searches"}
-                  tabIndex={isCollapsed ? -1 : 0}
-                >
-                  <span className="sidebar-count">{workflows.length}</span>
-                  <ChevronDown className={`sidebar-history-chevron ${isHistoryExpanded ? "is-expanded" : ""}`} />
-                </button>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
+          <SidebarGroup className={`sidebar-recent-group ${isHistoryExpanded ? "is-expanded" : ""} transition-all duration-300`}>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem className="relative flex items-center">
+                  <SidebarMenuButton
+                    onClick={() => {
+                      router.push("/history");
+                      closeMobile();
+                    }}
+                    className="workspace-nav-history cursor-pointer pr-16"
+                    tooltip="Research history"
+                    size="default"
+                  >
+                    <History className="h-5 w-5" strokeWidth={1.75} />
+                    <span>Research history</span>
+                  </SidebarMenuButton>
+                  <button
+                    type="button"
+                    className="sidebar-history-toggle-bar"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsHistoryExpanded((expanded) => !expanded);
+                    }}
+                    aria-controls="sidebar-research-history"
+                    aria-expanded={isHistoryExpanded}
+                    aria-label={isHistoryExpanded ? "Collapse inline searches" : "Expand inline searches"}
+                    title={isHistoryExpanded ? "Collapse inline searches" : "Show all searches"}
+                    tabIndex={isCollapsed ? -1 : 0}
+                  >
+                    <span className="sidebar-count">{workflows.length}</span>
+                    <ChevronDown className={`sidebar-history-chevron ${isHistoryExpanded ? "is-expanded" : ""}`} />
+                  </button>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
 
-          <div
-            id="sidebar-research-history"
-            className={`grid transition-[grid-template-rows,opacity] duration-250 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-              isHistoryExpanded && !isCollapsed
-                ? "grid-rows-[1fr] opacity-100"
-                : "grid-rows-[0fr] opacity-0 pointer-events-none"
-            }`}
-          >
+            <div
+              id="sidebar-research-history"
+              className={`grid transition-[grid-template-rows,opacity] duration-250 ease-[cubic-bezier(0.16,1,0.3,1)] ${isHistoryExpanded && !isCollapsed
+                  ? "grid-rows-[1fr] opacity-100"
+                  : "grid-rows-[0fr] opacity-0 pointer-events-none"
+                }`}
+            >
               <div className="overflow-hidden">
                 <SidebarGroupContent className="sidebar-session-list">
                   {loadingWorkflows && workflows.length === 0 ? (
@@ -380,142 +380,142 @@ export function ResearchSidebar({
                 </SidebarGroupContent>
               </div>
             </div>
-        </SidebarGroup>
-      </SidebarContent>
+          </SidebarGroup>
+        </SidebarContent>
 
-      <SidebarFooter className="workspace-sidebar-footer">
-        <div className="sidebar-rail-divider" />
-        <button
-          type="button"
-          className="sidebar-rail-toggle"
-          onClick={toggleSidebar}
-          aria-label="Expand sidebar (⌘B)"
-          title="Expand sidebar (⌘B)"
-          tabIndex={isCollapsed ? 0 : -1}
-        >
-          <PanelLeftOpen aria-hidden="true" className="h-5 w-5" strokeWidth={1.5} />
-        </button>
-        <div className="sidebar-account" ref={profileMenuRef} data-profile-menu>
-          {isProfileOpen && <button className="sidebar-account-dismiss" type="button" aria-label="Close account menu" onClick={() => setIsProfileOpen(false)} />}
-          {isProfileOpen && <div className="sidebar-account-menu">
-            <div className="sidebar-account-summary">
-              {isEditingName ? (
-                <form
-                  onSubmit={async (e) => {
-                    e.preventDefault();
-                    if (!editNameValue.trim() || isSavingName) return;
-                    setIsSavingName(true);
-                    try {
-                      await updateProfile(editNameValue.trim());
-                      setIsEditingName(false);
-                    } catch (err) {
-                      console.error("Failed to update name:", err);
-                    } finally {
-                      setIsSavingName(false);
-                    }
-                  }}
-                  className="flex items-center gap-1.5 my-1"
-                >
-                  <input
-                    type="text"
-                    value={editNameValue}
-                    onChange={(e) => setEditNameValue(e.target.value)}
-                    placeholder="Enter display name"
-                    autoFocus
-                    className="w-full text-xs px-2 py-1 rounded-md border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
-                  />
-                  <button
-                    type="submit"
-                    disabled={isSavingName}
-                    title="Save name"
-                    className="p-1 rounded-md bg-[var(--accent)] text-white hover:opacity-90 disabled:opacity-50 cursor-pointer"
-                  >
-                    <Check className="h-3 w-3" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setIsEditingName(false)}
-                    title="Cancel"
-                    className="p-1 rounded-md border border-[var(--border)] text-[var(--text-muted)] hover:bg-[var(--surface-hover)] cursor-pointer"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </form>
-              ) : (
-                <div className="flex items-center justify-between gap-1">
-                  <strong suppressHydrationWarning>{(mounted && user?.name) ? user.name : "Researcher"}</strong>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditNameValue(user?.name || "");
-                      setIsEditingName(true);
-                    }}
-                    title="Edit display name"
-                    className="text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors p-0.5 cursor-pointer"
-                  >
-                    <Pencil className="h-3 w-3" />
-                  </button>
-                </div>
-              )}
-              <span suppressHydrationWarning>{(mounted && user?.email) ? user.email : ""}</span>
-              <small suppressHydrationWarning>{(mounted && user?.role === "admin") ? "Staff Admin" : "Researcher"}</small>
-            </div>
-            {isCollapsed && (
-              <button
-                type="button"
-                className="sidebar-account-action"
-                onClick={() => {
-                  toggleSidebar();
-                  setIsProfileOpen(false);
-                }}
-              >
-                <PanelLeftOpen className="h-3.5 w-3.5" /> Expand sidebar
-              </button>
-            )}
-            {user?.role === "admin" && <a href="/admin" className="sidebar-account-action"><ShieldCheck /> Admin console</a>}
-            <button type="button" className="sidebar-account-action is-danger" onClick={logout}><LogOut /> Sign out</button>
-          </div>}
+        <SidebarFooter className="workspace-sidebar-footer">
+          <div className="sidebar-rail-divider" />
           <button
             type="button"
-            className="sidebar-profile-button cursor-pointer"
-            onClick={(e) => {
-              e.stopPropagation();
-              setIsProfileOpen((open) => !open);
-            }}
-            aria-label="Account menu"
-            title={mounted ? (user?.name || user?.email || "Account") : "Account"}
-            aria-expanded={isProfileOpen}
+            className="sidebar-rail-toggle"
+            onClick={toggleSidebar}
+            aria-label="Expand sidebar (⌘B)"
+            title="Expand sidebar (⌘B)"
+            tabIndex={isCollapsed ? 0 : -1}
           >
-            <span className="sidebar-profile-avatar" suppressHydrationWarning>
-              <span className="font-extrabold text-[13px] text-[var(--accent)]">
-                {mounted && (user?.name || user?.email) ? (user.name || user.email)![0].toUpperCase() : "A"}
-              </span>
-            </span>
-            <span className="sidebar-profile-copy">
-              <strong suppressHydrationWarning>{mounted && user?.name ? user.name : "Researcher"}</strong>
-              <small suppressHydrationWarning>{mounted && user?.email ? user.email : ""}</small>
-            </span>
-            <ChevronRight className={`sidebar-profile-chevron ${isProfileOpen ? "is-open" : ""}`} />
+            <PanelLeftOpen aria-hidden="true" className="h-5 w-5" strokeWidth={1.5} />
           </button>
-        </div>
-      </SidebarFooter>
-    </Sidebar>
-    {isMobile && (
-      <nav className="workspace-bottom-nav" aria-label="Main navigation">
-        <button type="button" onClick={onNewResearch} aria-label="New research" title="New research">
-          <Plus aria-hidden="true" /><span>New</span>
-        </button>
-        <button type="button" onClick={onOpenSavedReports} aria-label="Saved reports" title="Saved reports">
-          <Bookmark aria-hidden="true" /><span>Saved</span>
-        </button>
-        <button type="button" onClick={() => router.push("/history")} aria-label="Research history" title="Research history">
-          <History aria-hidden="true" /><span>History</span>
-        </button>
-        <button type="button" onClick={() => router.push("/dashboard")} aria-label="Home" title="Home">
-          <House aria-hidden="true" /><span>Home</span>
-        </button>
-      </nav>
-    )}
+          <div className="sidebar-account" ref={profileMenuRef} data-profile-menu>
+            {isProfileOpen && <button className="sidebar-account-dismiss" type="button" aria-label="Close account menu" onClick={() => setIsProfileOpen(false)} />}
+            {isProfileOpen && <div className="sidebar-account-menu">
+              <div className="sidebar-account-summary">
+                {isEditingName ? (
+                  <form
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+                      if (!editNameValue.trim() || isSavingName) return;
+                      setIsSavingName(true);
+                      try {
+                        await updateProfile(editNameValue.trim());
+                        setIsEditingName(false);
+                      } catch (err) {
+                        console.error("Failed to update name:", err);
+                      } finally {
+                        setIsSavingName(false);
+                      }
+                    }}
+                    className="flex items-center gap-1.5 my-1"
+                  >
+                    <input
+                      type="text"
+                      value={editNameValue}
+                      onChange={(e) => setEditNameValue(e.target.value)}
+                      placeholder="Enter display name"
+                      autoFocus
+                      className="w-full text-xs px-2 py-1 rounded-md border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+                    />
+                    <button
+                      type="submit"
+                      disabled={isSavingName}
+                      title="Save name"
+                      className="p-1 rounded-md bg-[var(--accent)] text-white hover:opacity-90 disabled:opacity-50 cursor-pointer"
+                    >
+                      <Check className="h-3 w-3" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingName(false)}
+                      title="Cancel"
+                      className="p-1 rounded-md border border-[var(--border)] text-[var(--text-muted)] hover:bg-[var(--surface-hover)] cursor-pointer"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </form>
+                ) : (
+                  <div className="flex items-center justify-between gap-1">
+                    <strong suppressHydrationWarning>{(mounted && user?.name) ? user.name : "Researcher"}</strong>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditNameValue(user?.name || "");
+                        setIsEditingName(true);
+                      }}
+                      title="Edit display name"
+                      className="text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors p-0.5 cursor-pointer"
+                    >
+                      <Pencil className="h-3 w-3" />
+                    </button>
+                  </div>
+                )}
+                <span suppressHydrationWarning>{(mounted && user?.email) ? user.email : ""}</span>
+                <small suppressHydrationWarning>{(mounted && user?.role === "admin") ? "Staff Admin" : "Researcher"}</small>
+              </div>
+              {isCollapsed && (
+                <button
+                  type="button"
+                  className="sidebar-account-action"
+                  onClick={() => {
+                    toggleSidebar();
+                    setIsProfileOpen(false);
+                  }}
+                >
+                  <PanelLeftOpen className="h-3.5 w-3.5" /> Expand sidebar
+                </button>
+              )}
+              {user?.role === "admin" && <a href="/admin" className="sidebar-account-action"><ShieldCheck /> Admin console</a>}
+              <button type="button" className="sidebar-account-action is-danger" onClick={logout}><LogOut /> Sign out</button>
+            </div>}
+            <button
+              type="button"
+              className="sidebar-profile-button cursor-pointer"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsProfileOpen((open) => !open);
+              }}
+              aria-label="Account menu"
+              title={mounted ? (user?.name || user?.email || "Account") : "Account"}
+              aria-expanded={isProfileOpen}
+            >
+              <span className="sidebar-profile-avatar" suppressHydrationWarning>
+                <span className="font-extrabold text-[13px] text-[var(--accent)]">
+                  {mounted && (user?.name || user?.email) ? (user.name || user.email)![0].toUpperCase() : "A"}
+                </span>
+              </span>
+              <span className="sidebar-profile-copy">
+                <strong suppressHydrationWarning>{mounted && user?.name ? user.name : "Researcher"}</strong>
+                <small suppressHydrationWarning>{mounted && user?.email ? user.email : ""}</small>
+              </span>
+              <ChevronRight className={`sidebar-profile-chevron ${isProfileOpen ? "is-open" : ""}`} />
+            </button>
+          </div>
+        </SidebarFooter>
+      </Sidebar>
+      {isMobile && (
+        <nav className="workspace-bottom-nav" aria-label="Main navigation">
+          <button type="button" onClick={onNewResearch} aria-label="New research" title="New research">
+            <Plus aria-hidden="true" /><span>New</span>
+          </button>
+          <button type="button" onClick={onOpenSavedReports} aria-label="Saved reports" title="Saved reports">
+            <Bookmark aria-hidden="true" /><span>Saved</span>
+          </button>
+          <button type="button" onClick={() => router.push("/history")} aria-label="Research history" title="Research history">
+            <History aria-hidden="true" /><span>History</span>
+          </button>
+          <button type="button" onClick={() => router.push("/dashboard")} aria-label="Home" title="Home">
+            <House aria-hidden="true" /><span>Home</span>
+          </button>
+        </nav>
+      )}
     </>
   );
 }

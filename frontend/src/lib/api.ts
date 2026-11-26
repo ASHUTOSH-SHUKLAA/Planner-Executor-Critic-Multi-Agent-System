@@ -397,7 +397,17 @@ export async function apiDownloadWorkflow(
     }
 
     const blob = await res.blob();
-    const filename = `synora_${workflowId}.${format}`;
+    let filename = "";
+    const disposition = res.headers.get("content-disposition");
+    if (disposition && disposition.includes("filename=")) {
+      const match = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+      if (match && match[1]) {
+        filename = match[1].replace(/['"]/g, "").trim();
+      }
+    }
+    if (!filename) {
+      filename = `synora_${workflowId}.${format}`;
+    }
     return { blob, filename };
   } catch (err: any) {
     handleFetchError(err);

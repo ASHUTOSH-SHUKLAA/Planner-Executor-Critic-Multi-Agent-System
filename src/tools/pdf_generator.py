@@ -6,8 +6,10 @@ into publication-grade, professionally styled PDF documents using ReportLab.
 
 import io
 import re
+import urllib.request
 from typing import List, Dict, Any, Optional
 
+from PIL import Image as PILImage
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
 from reportlab.platypus import (
@@ -18,6 +20,7 @@ from reportlab.platypus import (
     TableStyle,
     HRFlowable,
     KeepTogether,
+    Image as RLImage,
 )
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.pdfgen import canvas
@@ -78,15 +81,71 @@ class NumberedCanvas(canvas.Canvas):
         self.restoreState()
 
 
+UNICODE_SYMBOL_REPLACEMENTS = [
+    # Currency symbols (especially Indian Rupee which fails in ReportLab Type-1 Helvetica)
+    ("₹", "Rs. "),
+    # Directional arrows
+    ("➡", "->"),
+    ("➔", "->"),
+    ("➜", "->"),
+    ("→", "->"),
+    ("⬅", "<-"),
+    ("←", "<-"),
+    ("⬆", "^"),
+    ("↑", "^"),
+    ("⬇", "v"),
+    ("↓", "v"),
+    ("↔", "<->"),
+    # Checkmarks and validation status
+    ("✓", "[v]"),
+    ("✔", "[v]"),
+    ("✅", "[v]"),
+    ("✗", "[x]"),
+    ("✘", "[x]"),
+    ("❌", "[x]"),
+    # Bullets, stars, and shapes
+    ("⭐", "*"),
+    ("★", "*"),
+    ("■", "-"),
+    ("▪", "-"),
+    ("▫", "-"),
+    ("●", "-"),
+    ("○", "-"),
+    # Dashes and typographical quotation marks
+    ("—", "--"),
+    ("–", "-"),
+    ("“", '"'),
+    ("”", '"'),
+    ("‘", "'"),
+    ("’", "'"),
+    ("…", "..."),
+    # Common math and symbols
+    ("≤", "<="),
+    ("≥", ">="),
+    ("≠", "!="),
+    ("±", "+/-"),
+    ("×", "x"),
+    ("÷", "/"),
+    ("™", "(TM)"),
+    ("®", "(R)"),
+    ("©", "(C)"),
+]
+
+
 def clean_inline_markdown(text: str) -> str:
     """
     Transforms markdown inline syntax (**bold**, *italic*, `code`, [link](url))
-    into ReportLab-compatible XML tags while safely escaping raw HTML entities.
+    into ReportLab-compatible XML tags while safely escaping raw HTML entities
+    and replacing Unicode glyphs unsupported by standard PDF fonts.
     """
     if not text:
         return ""
 
-    # Remove markdown image tags ![alt](url)
+    # Replace unsupported Unicode glyphs to prevent black squares / dots (■)
+    for src, dst in UNICODE_SYMBOL_REPLACEMENTS:
+        text = text.replace(src, dst)
+
+    # Remove markdown image tags ![alt](url) from inline paragraphs
     text = re.sub(r"!\[([^\]]*)\]\([^)]+\)", r"[Image: \1]", text)
 
     # Escape HTML special chars first
@@ -112,6 +171,79 @@ def clean_inline_markdown(text: str) -> str:
     text = re.sub(r"\[([^\]]+)\]\((https?://[^)]+)\)", link_repl, text)
 
     return text.strip()
+
+
+def fetch_image_flowable(
+    url: str,
+    alt: str = "",
+    max_w: float = 460,
+    max_h: float = 230,
+    caption_style: Optional[ParagraphStyle] = None,
+) -> Optional[KeepTogether]:
+    """
+    Downloads an image from a URL, normalizes format using PIL, scales within bounds,
+    and returns a centered ReportLab KeepTogether flowable with optional caption.
+    """
+    try:
+        req = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/120.0.0.0 Safari/537.36"
+                ),
+                "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+            },
+        )
+        with urllib.request.urlopen(req, timeout=6) as response:
+            raw_bytes = response.read()
+
+        if not raw_bytes or len(raw_bytes) < 100:
+            return None
+
+        # Validate with PIL and convert formats (WEBP, RGBA, AVIF, CMYK) to RGB JPEG
+        pil_img = PILImage.open(io.BytesIO(raw_bytes))
+        orig_w, orig_h = pil_img.size
+        if orig_w <= 0 or orig_h <= 0:
+            return None
+
+        if pil_img.mode in ("RGBA", "LA") or (pil_img.mode == "P" and "transparency" in pil_img.info):
+            background = PILImage.new("RGB", pil_img.size, (255, 255, 255))
+            if pil_img.mode == "P":
+                pil_img = pil_img.convert("RGBA")
+            background.paste(pil_img, mask=pil_img.split()[3])
+            pil_img = background
+        elif pil_img.mode != "RGB":
+            pil_img = pil_img.convert("RGB")
+
+        # Proportional scaling within max bounds
+        aspect = orig_h / orig_w
+        scaled_w = min(orig_w, max_w)
+        scaled_h = scaled_w * aspect
+        if scaled_h > max_h:
+            scaled_h = max_h
+            scaled_w = scaled_h / aspect
+
+        img_buf = io.BytesIO()
+        pil_img.save(img_buf, format="JPEG", quality=88)
+        img_buf.seek(0)
+
+        rl_img = RLImage(img_buf, width=scaled_w, height=scaled_h)
+        rl_img.hAlign = "CENTER"
+
+        elements = [Spacer(1, 6), rl_img]
+        if alt and alt.strip():
+            clean_alt = clean_inline_markdown(alt.strip())
+            if caption_style:
+                elements.append(Spacer(1, 3))
+                elements.append(Paragraph(f"<i>Figure: {clean_alt}</i>", caption_style))
+        elements.append(Spacer(1, 6))
+
+        return KeepTogether(elements)
+    except Exception:
+        # Fallback gracefully if image cannot be downloaded or decoded
+        return None
 
 
 def generate_workflow_pdf(
@@ -212,6 +344,17 @@ def generate_workflow_pdf(
         textColor=colors.HexColor("#475569"),
         leftIndent=16,
         spaceBefore=3,
+        spaceAfter=4,
+    )
+
+    image_caption_style = ParagraphStyle(
+        "ImageCaption",
+        fontName="Helvetica-Oblique",
+        fontSize=8,
+        leading=11,
+        textColor=colors.HexColor("#64748B"),
+        alignment=1,
+        spaceBefore=2,
         spaceAfter=4,
     )
 
@@ -372,6 +515,24 @@ def generate_workflow_pdf(
 
         if not line:
             flowables.append(Spacer(1, 3))
+            continue
+
+        # Standalone Markdown Image ![alt](url)
+        img_match = re.match(r"^!\[([^\]]*)\]\((https?://[^\s)]+)\)$", line)
+        if img_match:
+            alt_text = img_match.group(1).strip()
+            img_url = img_match.group(2).strip()
+            img_flowable = fetch_image_flowable(
+                url=img_url,
+                alt=alt_text,
+                max_w=available_width * 0.88,
+                max_h=230,
+                caption_style=image_caption_style,
+            )
+            if img_flowable:
+                flowables.append(img_flowable)
+            elif alt_text:
+                flowables.append(Paragraph(f"<i>[Image: {clean_inline_markdown(alt_text)}]</i>", quote_style))
             continue
 
         # Horizontal rule
