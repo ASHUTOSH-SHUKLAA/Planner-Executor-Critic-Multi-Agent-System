@@ -17,6 +17,20 @@ export default function HomePage() {
     }
   }, [isLoading, isAuthenticated, isAdmin, router]);
 
+  // Handle Back-Forward Cache (bfcache) restoration: if user backs into "/" after logging out, ensure clean landing page
+  useEffect(() => {
+    const handlePageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) {
+        const token = localStorage.getItem("pec_token");
+        if (!token && isAuthenticated) {
+          window.location.reload();
+        }
+      }
+    };
+    window.addEventListener("pageshow", handlePageShow);
+    return () => window.removeEventListener("pageshow", handlePageShow);
+  }, [isAuthenticated]);
+
   // While auth is resolving AND we have a saved token, show the loading screen
   const hasSavedToken = typeof window !== "undefined" && Boolean(localStorage.getItem("pec_token"));
   const authResolving = isLoading || (hasSavedToken && !isAuthenticated);

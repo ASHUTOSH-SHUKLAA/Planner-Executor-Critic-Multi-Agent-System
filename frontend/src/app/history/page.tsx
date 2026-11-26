@@ -42,9 +42,23 @@ export default function HistoryPage() {
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
-      router.replace("/login");
+      router.replace("/");
     }
   }, [isAuthenticated, authLoading, router]);
+
+  // Handle Back-Forward Cache (bfcache) restoration: if user backs into history while logged out, immediately navigate to landing
+  useEffect(() => {
+    const handlePageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) {
+        const token = localStorage.getItem("pec_token");
+        if (!token) {
+          window.location.replace("/");
+        }
+      }
+    };
+    window.addEventListener("pageshow", handlePageShow);
+    return () => window.removeEventListener("pageshow", handlePageShow);
+  }, []);
 
   const fetchWorkflows = async () => {
     if (!token) return;
@@ -106,8 +120,7 @@ export default function HistoryPage() {
     (w.task || "").toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const hasSavedToken = typeof window !== "undefined" && Boolean(localStorage.getItem("pec_token"));
-  if (authLoading && !hasSavedToken && !isAuthenticated) {
+  if (authLoading || !isAuthenticated) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-[var(--background)] text-[var(--foreground)]">
         <BrandMark className="h-12 w-12 animate-pulse mb-4" />

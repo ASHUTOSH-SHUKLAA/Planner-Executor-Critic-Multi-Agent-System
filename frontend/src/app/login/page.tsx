@@ -121,6 +121,20 @@ export default function LoginPage() {
     }
   };
 
+  // Handle Back-Forward Cache (bfcache) restoration
+  useEffect(() => {
+    const handlePageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) {
+        const token = localStorage.getItem("pec_token");
+        if (token) {
+          router.replace("/");
+        }
+      }
+    };
+    window.addEventListener("pageshow", handlePageShow);
+    return () => window.removeEventListener("pageshow", handlePageShow);
+  }, [router]);
+
   // Prevent flash of login panel when already authenticated or loading auth state
   if (authLoading || isAuthenticated) {
     return (
@@ -133,6 +147,17 @@ export default function LoginPage() {
 
   return (
     <div className="auth-screen min-h-screen flex flex-col justify-center items-center bg-[var(--bg)] text-[var(--text)] px-4 py-12 relative overflow-hidden transition-colors duration-200">
+      {/* Top Left: Back to Home */}
+      <div className="absolute top-6 left-6 z-20">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium text-[#626b82] dark:text-[#a9b2c6] hover:text-[#1b2235] dark:hover:text-[#ffffff] hover:bg-[#eef1f8]/60 dark:hover:bg-[#1b2438]/60 transition-colors"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          <span>Back to home</span>
+        </Link>
+      </div>
+
       {/* Top Bar with Theme Toggle */}
       <div className="absolute top-6 right-6 z-20">
         <ThemeToggle />
