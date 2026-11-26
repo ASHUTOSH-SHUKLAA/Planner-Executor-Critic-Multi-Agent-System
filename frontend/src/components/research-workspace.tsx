@@ -1521,7 +1521,7 @@ export function ResearchWorkspace() {
                           {researchDepth === "deep" && (
                             <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse mr-1" />
                           )}
-                          <span>Deep Research</span>
+                          <span>Deep<span className="hidden xs:inline"> Research</span></span>
                         </button>
                       </SegmentedControl>
                     </div>
@@ -1555,19 +1555,19 @@ export function ResearchWorkspace() {
                       {/* Right Controls */}
                       <div className="composer-controls-right flex items-center gap-2">
                         {/* Model Config Dropdown */}
-                        <div className="relative inline-block text-left">
+                        <div className="relative inline-block text-left min-w-0">
                           <button
                             ref={modelButtonRef}
                             type="button"
                             onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)}
-                            className={`composer-model-button inline-flex items-center gap-1.5 px-3 rounded-full text-xs font-semibold transition-all cursor-pointer ${isModelDropdownOpen ? "is-open" : ""
+                            className={`composer-model-button inline-flex items-center gap-1.5 px-2.5 xs:px-3 rounded-full text-xs font-semibold transition-all cursor-pointer ${isModelDropdownOpen ? "is-open" : ""
                               }`}
                             title={`Select reasoning model (currently: ${selectedModelObj.name})`}
                             aria-expanded={isModelDropdownOpen}
                             aria-haspopup="listbox"
                           >
                             <Cpu className="h-3.5 w-3.5 text-[var(--accent)] shrink-0" strokeWidth={1.5} />
-                            <span className="truncate max-w-[95px] xs:max-w-[125px] sm:max-w-none">{selectedModelObj.name}</span>
+                            <span className="truncate max-w-[80px] xs:max-w-[120px] sm:max-w-none">{selectedModelObj.name}</span>
                             <ChevronDown className={`h-3 w-3 opacity-60 shrink-0 transition-transform duration-200 ${isModelDropdownOpen ? "rotate-180" : ""}`} />
                           </button>
 

@@ -117,7 +117,21 @@ export default function AdminPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = filename;
+
+      const item = workflows.find((w) => w.workflow_id === workflowId);
+      const rawTitle = item?.task || "";
+      const taskSlug = rawTitle
+        .replace(/[^\w\s-]/g, "")
+        .trim()
+        .toLowerCase()
+        .replace(/[-\s]+/g, "-")
+        .slice(0, 55);
+      const finalFilename =
+        (!filename || filename.startsWith("synora_")) && taskSlug
+          ? `${taskSlug}.${format}`
+          : (filename || `synora_report.${format}`);
+
+      a.download = finalFilename;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);

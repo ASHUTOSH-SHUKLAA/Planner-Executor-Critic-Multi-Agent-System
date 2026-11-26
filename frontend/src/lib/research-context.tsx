@@ -615,7 +615,21 @@ export function ResearchProvider({ children }: { children: ReactNode }) {
           const url = URL.createObjectURL(blob);
           const a = document.createElement("a");
           a.href = url;
-          a.download = filename;
+
+          // Ensure report-question-based slug is used if backend filename is missing or generic
+          const rawTitle = workflowState?.task || "";
+          const taskSlug = rawTitle
+            .replace(/[^\w\s-]/g, "")
+            .trim()
+            .toLowerCase()
+            .replace(/[-\s]+/g, "-")
+            .slice(0, 55);
+          const finalFilename =
+            (!filename || filename.startsWith("synora_") || filename.startsWith("synora-")) && taskSlug
+              ? `${taskSlug}.${format}`
+              : (filename || `synora_report.${format}`);
+
+          a.download = finalFilename;
           document.body.appendChild(a);
           a.click();
           document.body.removeChild(a);

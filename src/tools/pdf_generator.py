@@ -9,6 +9,11 @@ import re
 import urllib.request
 from typing import List, Dict, Any, Optional
 
+try:
+    import httpx
+except ImportError:
+    httpx = None
+
 from PIL import Image as PILImage
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
@@ -84,6 +89,85 @@ class NumberedCanvas(canvas.Canvas):
 UNICODE_SYMBOL_REPLACEMENTS = [
     # Currency symbols (especially Indian Rupee which fails in ReportLab Type-1 Helvetica)
     ("₹", "Rs. "),
+    ("₹ ", "Rs. "),
+    ("€", "EUR "),
+    ("£", "GBP "),
+    ("¥", "JPY "),
+    ("₩", "KRW "),
+    ("¢", " cents "),
+    # Emojis - Devices & Technology
+    ("📱", "[Phone] "),
+    ("💻", "[Laptop] "),
+    ("🖥️", "[Desktop] "),
+    ("🖥", "[Desktop] "),
+    ("⌨️", "[Keyboard] "),
+    ("⌨", "[Keyboard] "),
+    ("🖱️", "[Mouse] "),
+    ("🖱", "[Mouse] "),
+    ("🔌", "[Plug] "),
+    ("🔋", "[Battery] "),
+    ("⚡", "[Fast] "),
+    ("📸", "[Camera] "),
+    ("📷", "[Camera] "),
+    ("🎥", "[Video] "),
+    ("🎧", "[Audio] "),
+    ("🔊", "[Audio] "),
+    # Emojis - Commerce, Buying & Deals
+    ("🛒", "[Buy] "),
+    ("🛍️", "[Shop] "),
+    ("🛍", "[Shop] "),
+    ("🏷️", "[Deal] "),
+    ("🏷", "[Deal] "),
+    ("💳", "[Card] "),
+    ("💰", "[Price] "),
+    ("💵", "[Cash] "),
+    ("💎", "[Premium] "),
+    ("🔥", "[Hot] "),
+    ("💡", "[Insight] "),
+    ("⏳", "[Time] "),
+    ("⏱️", "[Time] "),
+    ("⏱", "[Time] "),
+    ("⏰", "[Time] "),
+    ("📅", "[Date] "),
+    # Stars, ratings & achievements
+    ("⭐", "*"),
+    ("🌟", "*"),
+    ("★", "*"),
+    ("☆", "*"),
+    ("✨", "*"),
+    ("🎯", "[Target] "),
+    ("🏆", "[Award] "),
+    ("🥇", "[#1] "),
+    ("🥈", "[#2] "),
+    ("🥉", "[#3] "),
+    # Education, Science & Productivity
+    ("🎓", "[Education] "),
+    ("🚀", "[Fast] "),
+    ("🔍", "[Search] "),
+    ("🔎", "[Search] "),
+    ("📊", "[Stats] "),
+    ("📈", "[Growth] "),
+    ("📉", "[Trend] "),
+    ("📦", "[Package] "),
+    ("🛡️", "[Shield] "),
+    ("🛡", "[Shield] "),
+    ("🔒", "[Secure] "),
+    ("🔑", "[Key] "),
+    ("⚙️", "[Settings] "),
+    ("⚙", "[Settings] "),
+    ("📌", "* "),
+    ("📍", "* "),
+    ("🔗", "[Link] "),
+    ("📝", "[Note] "),
+    ("📄", "[Doc] "),
+    ("📋", "[List] "),
+    ("👍", "[+1] "),
+    ("👎", "[-1] "),
+    ("❤️", "<3 "),
+    ("⚠️", "[!] "),
+    ("⚠", "[!] "),
+    ("ℹ️", "[i] "),
+    ("ℹ", "[i] "),
     # Directional arrows
     ("➡", "->"),
     ("➔", "->"),
@@ -104,13 +188,16 @@ UNICODE_SYMBOL_REPLACEMENTS = [
     ("✘", "[x]"),
     ("❌", "[x]"),
     # Bullets, stars, and shapes
-    ("⭐", "*"),
-    ("★", "*"),
     ("■", "-"),
     ("▪", "-"),
     ("▫", "-"),
     ("●", "-"),
     ("○", "-"),
+    ("•", "*"),
+    ("◦", "-"),
+    ("‣", ">"),
+    ("⁃", "-"),
+    ("□", "-"),
     # Dashes and typographical quotation marks
     ("—", "--"),
     ("–", "-"),
@@ -129,6 +216,9 @@ UNICODE_SYMBOL_REPLACEMENTS = [
     ("™", "(TM)"),
     ("®", "(R)"),
     ("©", "(C)"),
+    ("°", " deg "),
+    ("℃", " C"),
+    ("℉", " F"),
 ]
 
 
@@ -137,6 +227,7 @@ def clean_inline_markdown(text: str) -> str:
     Transforms markdown inline syntax (**bold**, *italic*, `code`, [link](url))
     into ReportLab-compatible XML tags while safely escaping raw HTML entities
     and replacing Unicode glyphs unsupported by standard PDF fonts.
+    Guarantees no unhandled characters outside Latin-1 reach ReportLab Helvetica.
     """
     if not text:
         return ""
@@ -170,6 +261,9 @@ def clean_inline_markdown(text: str) -> str:
 
     text = re.sub(r"\[([^\]]+)\]\((https?://[^)]+)\)", link_repl, text)
 
+    # Strip any remaining unhandled characters outside Latin-1 to prevent ReportLab black boxes
+    text = re.sub(r"[^\x00-\x7F\xA0-\xFF]", "", text)
+
     return text.strip()
 
 
@@ -181,27 +275,61 @@ def fetch_image_flowable(
     caption_style: Optional[ParagraphStyle] = None,
 ) -> Optional[KeepTogether]:
     """
-    Downloads an image from a URL, normalizes format using PIL, scales within bounds,
-    and returns a centered ReportLab KeepTogether flowable with optional caption.
+    Downloads an image from a URL using httpx with Wikimedia/CDN-compatible headers,
+    normalizes format using PIL, scales within bounds, and returns a centered
+    ReportLab KeepTogether flowable with optional caption.
     """
+    if not url or not url.startswith("http"):
+        return None
+
+    raw_bytes: Optional[bytes] = None
+    url_lower = url.lower()
+
+    # Category fallback images if remote host is dead or 403 Forbidden
+    is_phone = any(k in url_lower for k in ["phone", "mobile", "galaxy", "pixel", "oneplus", "iqoo", "nord", "realme", "xiaomi", "poco", "vivo", "motorola"])
+    is_laptop = any(k in url_lower for k in ["laptop", "macbook", "thinkpad", "zenbook", "ideapad"])
+    if is_phone:
+        fallback_url = "https://m.media-amazon.com/images/I/61esJgWizNL.jpg"
+    elif is_laptop:
+        fallback_url = "https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=1200&q=80"
+    else:
+        fallback_url = "https://images.unsplash.com/photo-1562774053-701939374585?auto=format&fit=crop&w=1200&q=80"
+
+    headers = {
+        "User-Agent": "AegisFlow/1.0 (https://aegisflow.ai; research@aegisflow.ai)",
+        "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+
     try:
-        req = urllib.request.Request(
-            url,
-            headers={
-                "User-Agent": (
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/120.0.0.0 Safari/537.36"
-                ),
-                "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
-            },
-        )
-        with urllib.request.urlopen(req, timeout=6) as response:
-            raw_bytes = response.read()
+        if httpx is not None:
+            with httpx.Client(follow_redirects=True, timeout=8.0) as client:
+                resp = client.get(url, headers=headers)
+                if resp.status_code == 200 and len(resp.content) > 100:
+                    raw_bytes = resp.content
+                elif fallback_url and fallback_url != url:
+                    fb_resp = client.get(fallback_url, headers=headers)
+                    if fb_resp.status_code == 200 and len(fb_resp.content) > 100:
+                        raw_bytes = fb_resp.content
+        else:
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=6) as response:
+                raw_bytes = response.read()
+    except Exception:
+        # If primary request fails, try fallback URL with httpx
+        try:
+            if httpx is not None and fallback_url and fallback_url != url:
+                with httpx.Client(follow_redirects=True, timeout=6.0) as client:
+                    fb_resp = client.get(fallback_url, headers=headers)
+                    if fb_resp.status_code == 200 and len(fb_resp.content) > 100:
+                        raw_bytes = fb_resp.content
+        except Exception:
+            raw_bytes = None
 
-        if not raw_bytes or len(raw_bytes) < 100:
-            return None
+    if not raw_bytes or len(raw_bytes) < 100:
+        return None
 
+    try:
         # Validate with PIL and convert formats (WEBP, RGBA, AVIF, CMYK) to RGB JPEG
         pil_img = PILImage.open(io.BytesIO(raw_bytes))
         orig_w, orig_h = pil_img.size
@@ -242,7 +370,7 @@ def fetch_image_flowable(
 
         return KeepTogether(elements)
     except Exception:
-        # Fallback gracefully if image cannot be downloaded or decoded
+        # Fallback gracefully if image cannot be decoded
         return None
 
 
@@ -518,10 +646,11 @@ def generate_workflow_pdf(
             continue
 
         # Standalone Markdown Image ![alt](url)
-        img_match = re.match(r"^!\[([^\]]*)\]\((https?://[^\s)]+)\)$", line)
+        img_match = re.match(r"^!\[([^\]]*)\]\((https?://[^)\s]+(?:\s+[^)]+)?)\)", line)
         if img_match:
             alt_text = img_match.group(1).strip()
-            img_url = img_match.group(2).strip()
+            raw_target = img_match.group(2).strip()
+            img_url = raw_target.split()[0].strip().strip('"').strip("'")
             img_flowable = fetch_image_flowable(
                 url=img_url,
                 alt=alt_text,
