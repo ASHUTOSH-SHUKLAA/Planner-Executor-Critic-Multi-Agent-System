@@ -1,7 +1,20 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { User, AuthResponse, SendCodeResult, apiLogin, apiRegister, apiGetMe, apiUpdateProfile, apiSendAuthCode, apiVerifyAuthCode } from "./api";
+import {
+  User,
+  AuthResponse,
+  SendCodeResult,
+  apiLogin,
+  apiRegister,
+  apiGetMe,
+  apiUpdateProfile,
+  apiSendAuthCode,
+  apiVerifyAuthCode,
+  apiGoogleAuth,
+  apiGoogleAuthCode,
+  apiGetGoogleAuthConfig,
+} from "./api";
 
 interface AuthContextType {
   user: User | null;
@@ -9,10 +22,13 @@ interface AuthContextType {
   isLoading: boolean;
   isAuthenticated: boolean;
   isAdmin: boolean;
+  googleClientId: string | null;
   requestCode: (email: string, name?: string) => Promise<SendCodeResult>;
   verifyCode: (email: string, code: string, name?: string) => Promise<AuthResponse>;
   login: (email: string, password: string) => Promise<AuthResponse>;
   register: (name: string, email: string, password: string) => Promise<void>;
+  loginWithGoogle: (credential: string) => Promise<AuthResponse>;
+  loginWithGoogleCode: (code: string, redirectUri: string) => Promise<AuthResponse>;
   updateProfile: (name: string) => Promise<User>;
   logout: () => void;
 }
@@ -24,6 +40,9 @@ const TOKEN_KEY = "pec_token";
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
+  const [googleClientId, setGoogleClientId] = useState<string | null>(
+    process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || null
+  );
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -49,6 +68,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setToken(null);
       setUser(null);
       setIsLoading(false);
+    }
+
+    // Load Google OAuth Client ID if not provided statically
+    if (!process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID) {
+      apiGetGoogleAuthConfig().then((cfg) => {
+        if (cfg.client_id) {
+          setGoogleClientId(cfg.client_id);
+        }
+      });
     }
   }, []);
 
@@ -79,6 +107,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(res.user);
   };
 
+  const loginWithGoogle = async (credential: string) => {
+    const res = await apiGoogleAuth(credential, googleClientId || undefined);
+    localStorage.setItem(TOKEN_KEY, res.access_token);
+    setToken(res.access_token);
+    setUser(res.user);
+    return res;
+  };
+
+  const loginWithGoogleCode = async (code: string, redirectUri: string) => {
+    const res = await apiGoogleAuthCode(code, redirectUri);
+    localStorage.setItem(TOKEN_KEY, res.access_token);
+    setToken(res.access_token);
+    setUser(res.user);
+    return res;
+  };
+
   const updateProfile = async (newName: string): Promise<User> => {
     if (!token) throw new Error("Not authenticated");
     const updatedUser = await apiUpdateProfile(token, newName);
@@ -103,10 +147,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isLoading,
         isAuthenticated: !!user && !!token,
         isAdmin: user?.role === "admin",
+        googleClientId,
         requestCode,
         verifyCode,
         login,
         register,
+        loginWithGoogle,
+        loginWithGoogleCode,
         updateProfile,
         logout,
       }}

@@ -388,3 +388,63 @@ def test_admin_cannot_execute_research_workflow():
     assert "reserved strictly for Researcher" in resp.json()["detail"]
 
 
+def test_google_auth_config_endpoint():
+    """Verify /api/auth/google/config returns enabled status and client_id."""
+    resp = client.get("/api/auth/google/config")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "enabled" in data
+    assert "client_id" in data
+
+
+def test_google_auth_registration_and_login_flow():
+    """Verify Google OAuth registration, auto-provisioning, role assignment, and JWT session."""
+    import uuid
+    random_id = uuid.uuid4().hex[:6]
+    google_email = f"google.user.{random_id}@gmail.com"
+    mock_token = f"mock-google-{google_email}:Ada Lovelace"
+
+    # 1. First-time registration via Google OAuth
+    resp = client.post("/api/auth/google", json={"credential": mock_token})
+    assert resp.status_code == 200
+    auth_data = resp.json()
+    assert "access_token" in auth_data
+    assert auth_data["user"]["email"] == google_email
+    assert auth_data["user"]["name"] == "Ada Lovelace"
+    assert auth_data["user"]["role"] == "user"
+    token = auth_data["access_token"]
+
+    # 2. Verify token validity on /me
+    me_resp = client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
+    assert me_resp.status_code == 200
+    assert me_resp.json()["email"] == google_email
+    assert me_resp.json()["name"] == "Ada Lovelace"
+
+    # 3. Subsequent login via Google OAuth returns existing user
+    login_resp = client.post("/api/auth/google", json={"credential": mock_token})
+    assert login_resp.status_code == 200
+    login_data = login_resp.json()
+    assert login_data["user"]["id"] == auth_data["user"]["id"]
+    assert login_data["user"]["email"] == google_email
+
+
+def test_google_auth_admin_role_assignment():
+    """Verify Google OAuth assigns admin role to recognized administrative email addresses."""
+    mock_admin_token = "mock-google-admin@triadflow.ai:Chief Admin"
+    resp = client.post("/api/auth/google", json={"credential": mock_admin_token})
+    assert resp.status_code == 200
+    auth_data = resp.json()
+    assert auth_data["user"]["role"] == "admin"
+
+
+def test_google_auth_rejects_invalid_token():
+    """Verify Google OAuth rejects empty, expired, or unverified tokens."""
+    empty_resp = client.post("/api/auth/google", json={"credential": "   "})
+    assert empty_resp.status_code == 400
+
+    bad_resp = client.post("/api/auth/google", json={"credential": "invalid-token-12345"})
+    assert bad_resp.status_code == 400
+    assert "Google authentication failed" in bad_resp.json()["detail"]
+
+
+

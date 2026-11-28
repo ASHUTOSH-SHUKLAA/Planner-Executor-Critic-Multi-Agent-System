@@ -112,6 +112,21 @@ def validate_authentic_email(email: str) -> str:
 
 
 # --- Schemas ---
+class GoogleAuthRequest(BaseModel):
+    credential: str = Field(description="Google ID Token JWT returned by Google Identity Services")
+    client_id: Optional[str] = Field(default=None, description="Optional Google Client ID override")
+
+
+class GoogleCodeRequest(BaseModel):
+    code: str = Field(description="Google OAuth2 authorization code")
+    redirect_uri: str = Field(description="OAuth2 redirect URI used in authorization request")
+
+
+class GoogleConfigResponse(BaseModel):
+    enabled: bool
+    client_id: Optional[str] = None
+
+
 class SendCodeRequest(BaseModel):
     email: EmailStr
     name: Optional[str] = None
@@ -222,9 +237,269 @@ def is_admin_email_address(email: str) -> bool:
     return False
 
 
+def verify_google_id_token(token: str, client_id: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Verifies a Google ID Token (JWT) and extracts user profile claims.
+    Uses google.oauth2.id_token and falls back to Google's tokeninfo API.
+    Supports simulated tokens in test environments.
+    """
+    token = token.strip()
+    if not token:
+        raise HTTPException(status_code=400, detail="Missing Google credential token.")
+
+    # 1. Test/Dev Environment Mock Token Support
+    is_test_env = bool(
+        os.getenv("PYTEST_CURRENT_TEST")
+        or os.getenv("TESTING", "").lower() in ("true", "1")
+        or os.getenv("MOCK_GOOGLE_AUTH", "").lower() in ("true", "1")
+    )
+    if is_test_env and token.startswith("mock-google-"):
+        # Format: mock-google-email@domain.com[:Display Name]
+        parts = token[len("mock-google-"):].split(":", 1)
+        mock_email = parts[0]
+        mock_name = parts[1] if len(parts) > 1 else mock_email.split("@")[0].title()
+        return {
+            "email": mock_email,
+            "name": mock_name,
+            "email_verified": True,
+            "sub": f"mock-sub-{mock_email}",
+        }
+
+    expected_client_id = (
+        client_id
+        or os.getenv("GOOGLE_CLIENT_ID", "").strip()
+        or os.getenv("NEXT_PUBLIC_GOOGLE_CLIENT_ID", "").strip()
+    )
+
+    # 2. Try google.oauth2.id_token verification
+    try:
+        from google.oauth2 import id_token
+        from google.auth.transport import requests as google_requests
+
+        id_info = id_token.verify_oauth2_token(
+            token,
+            google_requests.Request(),
+            audience=expected_client_id if expected_client_id else None,
+        )
+        if id_info and id_info.get("email"):
+            return id_info
+    except Exception:
+        pass
+
+    # 3. Fallback to Google's tokeninfo HTTP endpoint
+    try:
+        import httpx
+
+        with httpx.Client(timeout=10.0) as client:
+            resp = client.get(f"https://oauth2.googleapis.com/tokeninfo?id_token={token}")
+            if resp.status_code == 200:
+                data = resp.json()
+                if expected_client_id and data.get("aud") != expected_client_id:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Google authentication failed: Client ID audience mismatch.",
+                    )
+                if data.get("email"):
+                    return data
+    except HTTPException:
+        raise
+    except Exception:
+        pass
+
+    raise HTTPException(
+        status_code=400,
+        detail="Google authentication failed: Invalid, expired, or unverified Google token.",
+    )
+
+
+def provision_or_login_oauth_user(
+    email: str, name: Optional[str] = None, provider: str = "Google"
+) -> TokenResponse:
+    """
+    Common user provisioning & session generation for OAuth2 identity providers.
+    Creates account with auto-assigned role if not exists, or signs in existing user.
+    """
+    valid_email = validate_authentic_email(email)
+    user = get_user_by_email(valid_email)
+    from src.api.audit_logger import log_user_event
+
+    is_admin = is_admin_email_address(valid_email)
+
+    if not user:
+        role = "admin" if is_admin else "user"
+        display_name = (
+            name.strip()
+            if name and name.strip()
+            else valid_email.split("@")[0].replace(".", " ").title()
+        )
+        dummy_hash = hash_password(secrets.token_urlsafe(32))
+        user = create_user(
+            email=valid_email, name=display_name, password_hash=dummy_hash, role=role
+        )
+        log_user_event(
+            action="USER_REGISTRATION",
+            user_id=user["id"],
+            email=user["email"],
+            role=user["role"],
+            details=f"User registered via {provider} OAuth: '{user['name']}'",
+        )
+    else:
+        from src.api.database import set_user_role, update_user_name
+
+        if is_admin and user.get("role") != "admin":
+            set_user_role(user["id"], "admin")
+            user["role"] = "admin"
+
+        if name and name.strip() and (not user.get("name") or user.get("name") in ("User", valid_email.split("@")[0])):
+            update_user_name(user["id"], name.strip())
+            user["name"] = name.strip()
+
+        user_role = user.get("role", "user")
+        log_user_event(
+            action="USER_LOGIN",
+            user_id=user["id"],
+            email=user["email"],
+            role=user_role,
+            details=f"User authenticated successfully via {provider} OAuth for '{user['name']}'",
+        )
+
+    user_role = user.get("role", "user")
+    token = create_access_token(
+        data={
+            "sub": str(user["id"]),
+            "email": user["email"],
+            "name": user["name"],
+            "role": user_role,
+        }
+    )
+    return TokenResponse(
+        access_token=token,
+        user=UserResponse(
+            id=user["id"], name=user["name"], email=user["email"], role=user_role
+        ),
+    )
+
+
 from src.api.email_service import send_verification_email, is_smtp_configured
 
 # --- Endpoints ---
+@router.get("/google/config", response_model=GoogleConfigResponse)
+def get_google_auth_config():
+    """Returns the Google OAuth client ID and configuration status for the frontend."""
+    client_id = (
+        os.getenv("GOOGLE_CLIENT_ID", "").strip()
+        or os.getenv("NEXT_PUBLIC_GOOGLE_CLIENT_ID", "").strip()
+    )
+    return GoogleConfigResponse(
+        enabled=bool(client_id),
+        client_id=client_id or None,
+    )
+
+
+@router.post("/google", response_model=TokenResponse)
+def authenticate_with_google(req: GoogleAuthRequest):
+    """
+    Google One-Tap / Identity Services Login & Registration.
+    Verifies the Google ID token, ensures email authenticity and verification,
+    auto-provisions or retrieves user, and returns JWT session token.
+    """
+    id_info = verify_google_id_token(req.credential, req.client_id)
+    email = id_info.get("email")
+    if not email:
+        raise HTTPException(
+            status_code=400,
+            detail="Google authentication failed: Email claim missing from token.",
+        )
+
+    # Enforce verified email
+    email_verified = id_info.get("email_verified")
+    if email_verified is False or str(email_verified).lower() == "false":
+        raise HTTPException(
+            status_code=400, detail="Google account email is not verified by Google."
+        )
+
+    name = id_info.get("name") or id_info.get("given_name")
+    return provision_or_login_oauth_user(email=email, name=name, provider="Google")
+
+
+@router.post("/google/code", response_model=TokenResponse)
+def authenticate_with_google_code(req: GoogleCodeRequest):
+    """
+    Google OAuth2 Authorization Code Exchange.
+    Exchanges code for tokens, retrieves profile, and creates session.
+    """
+    client_id = (
+        os.getenv("GOOGLE_CLIENT_ID", "").strip()
+        or os.getenv("NEXT_PUBLIC_GOOGLE_CLIENT_ID", "").strip()
+    )
+    client_secret = os.getenv("GOOGLE_CLIENT_SECRET", "").strip()
+
+    if not client_id or not client_secret:
+        raise HTTPException(
+            status_code=500,
+            detail="Google OAuth is not configured on the server (missing GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET).",
+        )
+
+    import httpx
+
+    try:
+        with httpx.Client(timeout=15.0) as client:
+            token_resp = client.post(
+                "https://oauth2.googleapis.com/token",
+                data={
+                    "code": req.code,
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                    "redirect_uri": req.redirect_uri,
+                    "grant_type": "authorization_code",
+                },
+            )
+            if token_resp.status_code != 200:
+                err_data = (
+                    token_resp.json()
+                    if token_resp.headers.get("content-type", "").startswith("application/json")
+                    else {}
+                )
+                err_msg = (
+                    err_data.get("error_description")
+                    or err_data.get("error")
+                    or token_resp.text
+                )
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Google token exchange failed: {err_msg}",
+                )
+
+            tokens = token_resp.json()
+            access_token = tokens.get("access_token")
+            id_token_str = tokens.get("id_token")
+
+            # Try to verify id_token if returned, or fetch userinfo
+            if id_token_str:
+                id_info = verify_google_id_token(id_token_str, client_id)
+                email = id_info.get("email")
+                name = id_info.get("name")
+            else:
+                userinfo_resp = client.get(
+                    "https://www.googleapis.com/oauth2/v3/userinfo",
+                    headers={"Authorization": f"Bearer {access_token}"},
+                )
+                if userinfo_resp.status_code != 200:
+                    raise HTTPException(
+                        status_code=400, detail="Failed to fetch user profile from Google."
+                    )
+                user_data = userinfo_resp.json()
+                email = user_data.get("email")
+                name = user_data.get("name")
+
+            if not email:
+                raise HTTPException(status_code=400, detail="No email returned by Google.")
+
+            return provision_or_login_oauth_user(email=email, name=name, provider="Google")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Google OAuth exchange failed: {str(e)}")
 @router.post("/send-code", response_model=SendCodeResponse)
 def send_auth_code(req: SendCodeRequest):
     """

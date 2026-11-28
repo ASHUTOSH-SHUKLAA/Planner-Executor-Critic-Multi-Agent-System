@@ -291,6 +291,78 @@ export async function apiGetMe(token: string): Promise<User> {
   }
 }
 
+export interface GoogleAuthConfig {
+  enabled: boolean;
+  client_id?: string | null;
+}
+
+/**
+ * Fetch Google OAuth client configuration status from the backend
+ */
+export async function apiGetGoogleAuthConfig(): Promise<GoogleAuthConfig> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/google/config`);
+    if (!res.ok) {
+      return { enabled: false, client_id: null };
+    }
+    return await res.json();
+  } catch {
+    return { enabled: false, client_id: null };
+  }
+}
+
+/**
+ * Authenticate with Google ID Token credential (One-Tap / Google Identity Services)
+ */
+export async function apiGoogleAuth(credential: string, clientId?: string): Promise<AuthResponse> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/google`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ credential, client_id: clientId }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: "Google sign-in failed" }));
+      throw new Error(err.detail || "Google sign-in failed");
+    }
+
+    const data: AuthResponse = await res.json();
+    if (data.user && !data.user.username) {
+      data.user.username = data.user.name;
+    }
+    return data;
+  } catch (err: any) {
+    handleFetchError(err);
+  }
+}
+
+/**
+ * Authenticate with Google authorization code (OAuth2 popup/redirect flow)
+ */
+export async function apiGoogleAuthCode(code: string, redirectUri: string): Promise<AuthResponse> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/google/code`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code, redirect_uri: redirectUri }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: "Google authorization failed" }));
+      throw new Error(err.detail || "Google authorization failed");
+    }
+
+    const data: AuthResponse = await res.json();
+    if (data.user && !data.user.username) {
+      data.user.username = data.user.name;
+    }
+    return data;
+  } catch (err: any) {
+    handleFetchError(err);
+  }
+}
+
 export async function apiUpdateProfile(token: string, name: string): Promise<User> {
   try {
     const res = await fetch(`${API_BASE_URL}/api/auth/me`, {

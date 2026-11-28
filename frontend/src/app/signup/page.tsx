@@ -9,6 +9,7 @@ import { OtpInput } from "@/components/ui/otp-input";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { BrandMark } from "@/components/brand-mark";
+import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { User, Mail, ArrowRight, ArrowLeft, AlertCircle } from "lucide-react";
 
 export default function SignupPage() {
@@ -174,6 +175,24 @@ export default function SignupPage() {
           </div>
         )}
 
+        {/* 1-Click Google Sign-Up */}
+        {step === "details" && (
+          <div className="mb-5">
+            <GoogleSignInButton mode="signup" onError={setError} />
+
+            <div className="relative my-4">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-[#dce2ee] dark:border-[#303b58]" />
+              </div>
+              <div className="relative flex justify-center text-[11px] uppercase tracking-wider">
+                <span className="bg-[#ffffff] dark:bg-[#1b2438] px-2 text-[#626b82] dark:text-[#a9b2c6]">
+                  or register with email
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
         {step === "details" ? (
           <form onSubmit={handleSendCode} className="space-y-4">
             <div>
@@ -290,19 +309,34 @@ export default function SignupPage() {
               )}
             </Button>
 
-            <div className="text-center pt-1">
-              <button
-                type="button"
-                disabled={resendCountdown > 0 || isLoading}
-                onClick={handleSendCode}
-                className="text-xs text-[#626b82] dark:text-[#a9b2c6] hover:text-[#6259b5] dark:hover:text-[#c6c2fa] disabled:opacity-50 cursor-pointer transition-colors"
-              >
-                {resendCountdown > 0 ? (
-                  <span>Resend code in {resendCountdown}s</span>
-                ) : (
-                  <span>Didn&apos;t receive code? Resend</span>
-                )}
-              </button>
+            <div className="text-center pt-1 space-y-1.5">
+              <div>
+                <button
+                  type="button"
+                  disabled={resendCountdown > 0 || isLoading}
+                  onClick={handleSendCode}
+                  className="text-xs text-[#626b82] dark:text-[#a9b2c6] hover:text-[#6259b5] dark:hover:text-[#c6c2fa] disabled:opacity-50 cursor-pointer transition-colors"
+                >
+                  {resendCountdown > 0 ? (
+                    <span>Resend code in {resendCountdown}s</span>
+                  ) : (
+                    <span>Didn&apos;t receive code? Resend</span>
+                  )}
+                </button>
+              </div>
+
+              <div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStep("details");
+                    setError(null);
+                  }}
+                  className="text-xs text-[#6259b5] dark:text-[#c6c2fa] hover:underline cursor-pointer"
+                >
+                  Code not arriving? Sign up with Google
+                </button>
+              </div>
             </div>
           </form>
         )}
